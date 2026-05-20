@@ -1,0 +1,5 @@
+LOG FILE OPENED OK
+CHECKPOINT: dotenv loaded
+CHECKPOINT: Flask app created
+CHECKPOINT: CORS done
+CHECKPOINT: constants defined

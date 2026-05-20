@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALIMCO Export Intelligence Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#07101f;--surface:#0d1b2e;--surface2:#132240;
+  --border:rgba(99,179,237,0.10);--accent:#2f80ed;--accent2:#7c3aed;
+  --success:#10b981;--warning:#f59e0b;--danger:#ef4444;
+  --text:#eef4ff;--muted:#5a7a9a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh}
+h1,h2,.kpi-val,.sb-val{font-family:'Sora',sans-serif}
+a{color:var(--accent)}
+/* ERROR BANNER */
+#errorBanner{background:#7f1d1d;color:#fca5a5;padding:10px 20px;font-size:13px;border-bottom:1px solid #991b1b;display:none}
+/* HEADER */
+.hdr{background:var(--surface);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:200}
+.hdr-left{display:flex;align-items:center;gap:12px}
+.logo{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:18px;color:#fff;flex-shrink:0}
+.hdr-title{font-size:17px;font-weight:700;color:var(--text)}
+.hdr-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.hdr-meta{font-size:11px;color:var(--muted);margin-right:4px}
+.btn-ico{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:5px;transition:.2s}
+.btn-ico:hover{background:#1e3150}
+.bell-wrap{position:relative}
+.bell-btn{background:var(--danger);border:none;color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;position:relative}
+.bell-count{position:absolute;top:-6px;right:-6px;background:#fff;color:var(--danger);border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+/* FILTERS */
+.filters{background:var(--surface);padding:10px 24px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.filters select{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:8px;font-size:12px;cursor:pointer;min-width:140px}
+.filters select option{background:var(--surface2)}
+.btn-clear{background:none;border:1px solid var(--border);color:var(--muted);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px}
+.btn-clear:hover{color:var(--text);border-color:var(--muted)}
+/* BODY */
+.body{padding:20px 24px;display:flex;flex-direction:column;gap:18px}
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;transition:.25s}
+.kpi:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.kpi-lbl{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.kpi-val{font-size:22px;font-weight:700;color:var(--text)}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:4px}
+/* MAP */
+.map-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.card-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+#map{height:380px;border-radius:8px;z-index:1}
+.map-legend{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.leg-dot{width:10px;height:10px;border-radius:50%}
+/* CHARTS */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.chart-wrap{position:relative;height:200px}
+/* SOURCE BAR */
+.source-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.src-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.src-lbl{width:100px;font-size:11px;color:var(--muted);text-align:right;flex-shrink:0}
+.src-track{flex:1;background:var(--surface2);border-radius:4px;height:16px;overflow:hidden}
+.src-fill{height:100%;border-radius:4px;transition:width .9s ease}
+.src-val{width:80px;font-size:11px;color:var(--text);text-align:right;flex-shrink:0}
+/* TABLE */
+.tbl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.tbl-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.tbl-count{font-size:11px;color:var(--muted)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
+th{background:var(--surface2);padding:10px 12px;text-align:left;color:var(--muted);white-space:nowrap;cursor:pointer;user-select:none;font-size:11px;font-weight:500}
+th:hover{color:var(--text)}
+th.sort-asc::after{content:" ▲"}
+th.sort-desc::after{content:" ▼"}
+td{padding:10px 12px;border-top:1px solid var(--border);white-space:nowrap;vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600}
+.b-hot{background:rgba(239,68,68,.18);color:#ef4444}
+.b-neg{background:rgba(245,158,11,.18);color:#f59e0b}
+.b-int{background:rgba(47,128,237,.18);color:#2f80ed}
+.b-cold{background:rgba(90,122,154,.18);color:#5a7a9a}
+.b-won{background:rgba(16,185,129,.18);color:#10b981}
+.b-reply{background:rgba(124,58,237,.18);color:#7c3aed}
+.b-ni{background:rgba(239,68,68,.12);color:#f87171}
+/* SIDEBAR */
+.sidebar{position:fixed;top:0;right:0;width:440px;height:100vh;background:linear-gradient(180deg,var(--surface),var(--bg));border-left:1px solid var(--border);z-index:500;transform:translateX(100%);transition:.35s ease;display:flex;flex-direction:column;box-shadow:-12px 0 40px rgba(0,0,0,.4)}
+.sidebar.open{transform:translateX(0)}
+.sb-hdr{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.sb-title{font-size:16px;font-weight:700;color:var(--text)}
+.sb-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.sb-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
+.sb-close:hover{color:var(--text)}
+.sb-body{flex:1;overflow-y:auto;padding:18px 20px}
+.sb-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.sb-card{background:var(--surface2);border-radius:10px;padding:12px}
+.sb-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.sb-val{font-size:20px;font-weight:700;color:var(--text)}
+.sb-section{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px}
+.insight-box{background:var(--surface2);border-radius:8px;padding:14px;font-size:12px;line-height:1.8;color:#c8d8f0;white-space:pre-wrap;max-height:260px;overflow-y:auto}
+.alert-card{background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid}
+.ac-crit{border-color:var(--danger)}
+.ac-high{border-color:var(--warning)}
+.ac-med{border-color:var(--accent)}
+.ac-urgency{font-size:10px;font-weight:700;margin-bottom:4px;text-transform:uppercase}
+.ac-company{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
+.ac-alert{font-size:11px;color:var(--muted);margin-bottom:3px}
+.ac-action{font-size:11px;color:var(--accent)}
+.ac-due{font-size:10px;color:var(--danger);margin-top:4px}
+.btn-refresh{width:100%;padding:10px;background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;color:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;margin-top:14px;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-refresh:hover{opacity:.9}
+/* AI FAB */
+.ai-fab{position:fixed;bottom:20px;right:20px;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;border:none;padding:12px 18px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:700;z-index:400;box-shadow:0 6px 24px rgba(47,128,237,.35)}
+.ai-fab:hover{opacity:.9}
+/* MODAL */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:600;opacity:0;pointer-events:none;transition:.3s}
+.modal-overlay.show{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:400px;max-width:94vw;overflow:hidden;transform:translateY(18px);transition:.3s}
+.modal-overlay.show .modal{transform:translateY(0)}
+.modal-hdr{background:linear-gradient(90deg,rgba(239,68,68,.14),rgba(245,158,11,.08));padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-hdr-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px}
+.modal-hdr-sub{font-size:11px;color:var(--muted)}
+.modal-body{padding:16px 20px;max-height:280px;overflow-y:auto}
+.modal-alert{padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.modal-alert:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.modal-footer{padding:12px 20px;display:flex;gap:8px;border-top:1px solid var(--border)}
+.modal-btn{flex:1;padding:9px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;border:none}
+.btn-dismiss{background:var(--surface2);color:var(--muted)}
+.btn-dismiss:hover{color:var(--text)}
+.btn-view-alerts{background:var(--accent);color:#fff}
+.btn-view-alerts:hover{opacity:.9}
+/* SPINNER */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin .7s linear infinite}
+/* RESPONSIVE */
+@media(max-width:1200px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:800px){
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .charts-row{grid-template-columns:1fr}
+  .sidebar{width:100%}
+  .hdr{flex-wrap:wrap;gap:8px}
+}
+</style>
+</head>
+<body>
+
+<div id="errorBanner"></div>
+
+<header class="hdr">
+  <div class="hdr-left">
+    <div class="logo">A</div>
+    <div>
+      <div class="hdr-title">ALIMCO Export Intelligence</div>
+      <div class="hdr-sub">Artificial Limbs &amp; Manufacturing Corporation of India · Export Division</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span class="hdr-meta">Updated: <span id="lastUpdated">—</span></span>
+    <button class="btn-ico" onclick="doRefresh()" id="refreshBtn">⟳ Refresh</button>
+    <div class="bell-wrap">
+      <button class="bell-btn" onclick="openModal()" title="Urgent alerts" aria-label="View urgent alerts">
+        🔔
+        <span class="bell-count" id="bellCount">0</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="filters">
+  <select id="fCountry" onchange="applyFilters()"><option value="">All Countries</option></select>
+  <select id="fStatus"  onchange="applyFilters()"><option value="">All Statuses</option></select>
+  <select id="fStage"   onchange="applyFilters()"><option value="">All Stages</option></select>
+  <select id="fType"    onchange="applyFilters()"><option value="">All Types</option></select>
+  <select id="fSource"  onchange="applyFilters()"><option value="">All Sources</option></select>
+  <button class="btn-clear" onclick="clearFilters()">✕ Clear Filters</button>
+</div>
+
+<div class="body">
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-lbl">Total Leads</div><div class="kpi-val" id="k1">0</div><div class="kpi-sub">Active pipeline</div></div>
+    <div class="kpi"><div class="kpi-lbl">Countries</div><div class="kpi-val" id="k2">0</div><div class="kpi-sub">Markets reached</div></div>
+    <div class="kpi"><div class="kpi-lbl">Pipeline ₹</div><div class="kpi-val" id="k3" style="font-size:16px">₹0</div><div class="kpi-sub">Total INR value</div></div>
+    <div class="kpi"><div class="kpi-lbl">Pipeline $</div><div class="kpi-val" id="k4" style="font-size:16px">$0</div><div class="kpi-sub">Total USD value</div></div>
+    <div class="kpi"><div class="kpi-lbl">Active Leads</div><div class="kpi-val" id="k5" style="color:var(--success)">0</div><div class="kpi-sub">Interested + Negotiating</div></div>
+    <div class="kpi"><div class="kpi-lbl">Avg Deal ₹</div><div class="kpi-val" id="k6" style="font-size:16px">₹0</div><div class="kpi-sub">Per lead (INR)</div></div>
+  </div>
+
+  <div class="map-card">
+    <div class="card-title">🌍 World Coverage Map — circle size = pipeline value</div>
+    <div id="map"></div>
+    <div class="map-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--success)"></div>Hot / Interested</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--accent)"></div>High Value (&gt;₹5L)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--accent2)"></div>Active / Proposal</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="card-title">📊 Country Pipeline ₹</div>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">🟠 Lead Status</div>
+      <div class="chart-wrap"><canvas id="doughChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="card-title">📈 Pipeline Trend by Country</div>
+      <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">🔵 Deal Stage Distribution</div>
+      <div class="chart-wrap"><canvas id="stageChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="source-card">
+    <div class="card-title">🏷️ Lead Source Performance</div>
+    <div id="sourceBar"></div>
+  </div>
+
+  <div class="tbl-card">
+    <div class="tbl-hdr">
+      <div class="card-title" style="margin:0">📋 Export Leads</div>
+      <div class="tbl-count" id="tblCount">0 leads</div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('sno')">#</th>
+            <th onclick="sortTable('company')">Company</th>
+            <th onclick="sortTable('contact_name')">Contact</th>
+            <th onclick="sortTable('country')">Country</th>
+            <th onclick="sortTable('city')">City</th>
+            <th onclick="sortTable('lead_status')">Status</th>
+            <th onclick="sortTable('deal_stage')">Stage</th>
+            <th onclick="sortTable('order_type')">Type</th>
+            <th onclick="sortTable('value_inr')">Value ₹</th>
+            <th onclick="sortTable('value_usd')">Value $</th>
+            <th onclick="sortTable('lead_source')">Source</th>
+            <th onclick="sortTable('last_contacted')">Last Contact</th>
+            <th onclick="sortTable('order_number')">Order #</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="tblBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- AI SIDEBAR -->
+<div class="sidebar" id="sidebar">
+  <div class="sb-hdr">
+    <div>
+      <div class="sb-title">🤖 AI Insights</div>
+      <div class="sb-sub">Powered by Claude · Live export analysis</div>
+    </div>
+    <button class="sb-close" onclick="closeSidebar()">✕</button>
+  </div>
+  <div class="sb-body">
+    <div class="sb-grid">
+      <div class="sb-card"><div class="sb-lbl">Top Market</div><div class="sb-val" id="sbTop">—</div></div>
+      <div class="sb-card"><div class="sb-lbl">Pipeline ₹</div><div class="sb-val" id="sbPipe" style="font-size:14px">—</div></div>
+      <div class="sb-card"><div class="sb-lbl">Active %</div><div class="sb-val" id="sbConv" style="color:var(--success)">—</div></div>
+      <div class="sb-card"><div class="sb-lbl">Alerts</div><div class="sb-val" id="sbAlerts" style="color:var(--danger)">0</div></div>
+    </div>
+    <div class="sb-section">Executive Briefing</div>
+    <div class="insight-box" id="aiInsights">Loading AI analysis...</div>
+    <div class="sb-section">AI-Detected Alerts</div>
+    <div id="alertsList"></div>
+    <button class="btn-refresh" onclick="doRefresh()" id="sbRefreshBtn">⟳ Refresh Data + Re-run AI</button>
+  </div>
+</div>
+
+<button class="ai-fab" onclick="toggleSidebar()">🤖 AI Insights</button>
+
+<!-- URGENT ALERT MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-hdr-title">🚨 Urgent Action Required</div>
+      <div class="modal-hdr-sub" id="modalSub">AI has identified items needing attention</div>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="modal-btn btn-dismiss" onclick="dismissModal()">Dismiss</button>
+      <button class="modal-btn btn-view-alerts" onclick="dismissModal();toggleSidebar()">View All Alerts</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEMO_DATA = [
+  {sno:1,company:"Afrimed Pharmaceutical Ltd.",contact_name:"Mr. Hyder Khan",last_contacted:"2026-03-01",order_number:"100 BTE TD 0E 17036",order_type:"Product Supply",value_inr:680256,value_usd:8503.2,lead_source:"Email",lead_status:"Interested",deal_stage:"Negotiating",email:"afrimedpharmaceuticals@gmail.com",country:"Zambia",city:"LUSAKA",pin_code:"10101",contact_number:"+260 979 328887",notes:"Interested in Hearing Aids",last_updated:"2026-05-19"},
+  {sno:2,company:"SJS Life Sciences Ltd.",contact_name:"Jitendra Pandey",last_contacted:"2026-05-12",order_number:"101 BTE TD 0E 17036",order_type:"Product Supply",value_inr:680256,value_usd:8503.2,lead_source:"Email",lead_status:"Negotiating",deal_stage:"Negotiating",email:"jkpandey3s@gmail.com",country:"Nigeria",city:"LAGOS",pin_code:"100271",contact_number:"+2348128444444",notes:"Interested in Hearing Aids",last_updated:"2026-05-19"},
+  {sno:3,company:"Medikit Corporation",contact_name:"Md. Mamunor Rashid",last_contacted:"2026-04-07",order_number:"MULTIPLE ASSISTIVE DEVICES",order_type:"Product Supply",value_inr:62458200,value_usd:780727.5,lead_source:"Email",lead_status:"Not Interested",deal_stage:"Closed - Lost",email:"s.johnson@texmart.us",country:"Bangladesh",city:"Dhaka",pin_code:"1206",contact_number:"+2348128444444",notes:"Responded to email",last_updated:"2026-05-19"},
+  {sno:4,company:"Kamsitoc Global Trading Sarl",contact_name:"Comrade Kwaku Jojo (Mr)",last_contacted:"2026-01-05",order_number:"MULTIPLE ASSISTIVE DEVICES",order_type:"Product Supply",value_inr:45000,value_usd:562.5,lead_source:"Email",lead_status:"Interested",deal_stage:"Negotiating",email:"kwakujojo.7@gmail.com",country:"Togo",city:"Lome",pin_code:"42041",contact_number:"+22898191726",notes:"export pricing required",last_updated:"2026-05-19"},
+  {sno:5,company:"JMB Entity",contact_name:"Dr. Rasar Rahim",last_contacted:"",order_number:"",order_type:"Product Supply",value_inr:0,value_usd:0,lead_source:"ITEC",lead_status:"Reply to be Given",deal_stage:"Proposal",email:"rasarrebwar@gmail.com",country:"Iraq",city:"",pin_code:"",contact_number:"",notes:"export pricing required",last_updated:""},
+  {sno:6,company:"Mongolian Burn Association",contact_name:"Dr. Batorgil Enkhbayar",last_contacted:"2026-02-26",order_number:"phased collaboration",order_type:"Phased Collaboration",value_inr:0,value_usd:0,lead_source:"Email",lead_status:"Reply to be Given",deal_stage:"Proposal",email:"btrglcx98@gmail.com",country:"Mongolia",city:"",pin_code:"",contact_number:"",notes:"email to be replied",last_updated:""},
+  {sno:7,company:"JMB Pharmaceuticals Pvt. Ltd.",contact_name:"Krishna Mehta",last_contacted:"2026-03-12",order_number:"orthotics and prosthetics",order_type:"Product Supply",value_inr:0,value_usd:0,lead_source:"Email",lead_status:"Reply to be Given",deal_stage:"Proposal",email:"wessely@jmbpharma.com",country:"Turkmenistan",city:"",pin_code:"",contact_number:"+91-9082004363",notes:"email to be replied",last_updated:""},
+  {sno:8,company:"Tripalogix Pty Ltd",contact_name:"Karabo Motsamai Vuso",last_contacted:"2026-02-23",order_number:"MULTIPLE ASSISTIVE DEVICES",order_type:"Product Supply",value_inr:0,value_usd:0,lead_source:"Email",lead_status:"Reply to be Given",deal_stage:"Proposal",email:"tripalogix@gmail.com",country:"South Africa",city:"",pin_code:"",contact_number:"0615414005",notes:"email to be replied",last_updated:""},
+  {sno:9,company:"Kamal Group",contact_name:"Mr. Sameer Santosh",last_contacted:"2026-05-18",order_number:"",order_type:"Phased Collaboration",value_inr:0,value_usd:0,lead_source:"Visit",lead_status:"Interested",deal_stage:"Proposal",email:"md@kamal-group.co.tz",country:"Tanzania",city:"Dar es Salaam",pin_code:"10392",contact_number:"+255 767 624 571",notes:"reply awaited",last_updated:""},
+  {sno:10,company:"METL",contact_name:"Mr. Gulam Dewji",last_contacted:"2026-05-18",order_number:"",order_type:"Phased Collaboration",value_inr:0,value_usd:0,lead_source:"Visit",lead_status:"Interested",deal_stage:"Proposal",email:"gd@metl.net",country:"Tanzania",city:"Dar es Salaam",pin_code:"20660",contact_number:"+255 754 600 000",notes:"reply awaited",last_updated:""}
+];
+
+const PALETTE=['#2f80ed','#7c3aed','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#a855f7'];
+const chartInstances={};
+let allData=[], filteredData=[], allAlerts=[];
+let sortCol='sno', sortDir=1;
+let leafletMap=null, markerLayer=null;
+
+function fmtINR(n){
+  n=Math.round(n);
+  if(n>=10000000)return'₹'+(n/10000000).toFixed(2)+'Cr';
+  if(n>=100000)return'₹'+(n/100000).toFixed(1)+'L';
+  return'₹'+n.toLocaleString('en-IN');
+}
+function fmtUSD(n){return'$'+Math.round(n).toLocaleString();}
+function palette(n){return Array.from({length:n},(_,i)=>PALETTE[i%PALETTE.length]);}
+
+function statusBadge(s){
+  if(!s)return'<span class="badge b-cold">—</span>';
+  const sl=s.toLowerCase();
+  if(sl.includes('hot'))return`<span class="badge b-hot">${s}</span>`;
+  if(sl.includes('negotiat'))return`<span class="badge b-neg">${s}</span>`;
+  if(sl.includes('interest'))return`<span class="badge b-int">${s}</span>`;
+  if(sl.includes('cold')||sl.includes('lost'))return`<span class="badge b-cold">${s}</span>`;
+  if(sl.includes('won')||sl.includes('closed'))return`<span class="badge b-won">${s}</span>`;
+  if(sl.includes('reply')||sl.includes('proposal'))return`<span class="badge b-reply">${s}</span>`;
+  if(sl.includes('not interest'))return`<span class="badge b-ni">${s}</span>`;
+  return`<span class="badge b-cold">${s}</span>`;
+}
+
+function countUp(el,target,fmt){
+  const steps=40,dur=800;
+  let i=0;
+  const t=setInterval(()=>{
+    i++;
+    const v=Math.min(target*(i/steps),target);
+    el.textContent=fmt?fmt(v):Math.round(v).toLocaleString();
+    if(i>=steps){el.textContent=fmt?fmt(target):Math.round(target).toLocaleString();clearInterval(t);}
+  },dur/steps);
+}
+
+function renderKPIs(){
+  const d=filteredData;
+  const totalINR=d.reduce((a,b)=>a+b.value_inr,0);
+  const totalUSD=d.reduce((a,b)=>a+b.value_usd,0);
+  const countries=new Set(d.map(x=>x.country).filter(Boolean)).size;
+  const active=d.filter(x=>{const s=(x.lead_status||'').toLowerCase();return s.includes('interest')||s.includes('negotiat');}).length;
+  const avg=d.length?totalINR/d.length:0;
+  countUp(document.getElementById('k1'),d.length);
+  countUp(document.getElementById('k2'),countries);
+  countUp(document.getElementById('k3'),totalINR,fmtINR);
+  countUp(document.getElementById('k4'),totalUSD,fmtUSD);
+  countUp(document.getElementById('k5'),active);
+  countUp(document.getElementById('k6'),avg,fmtINR);
+}
+
+function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
+
+function chartBase(){
+  return{
+    responsive:true,maintainAspectRatio:false,animation:{duration:1200},
+    plugins:{
+      legend:{labels:{color:'white',font:{size:11}}},
+      tooltip:{backgroundColor:'#111827',titleColor:'white',bodyColor:'white',borderColor:PALETTE[0],borderWidth:1}
+    }
+  };
+}
+function scaleBase(){
+  return{
+    x:{ticks:{color:'#5a7a9a',font:{size:10}},grid:{color:'rgba(255,255,255,0.05)'}},
+    y:{ticks:{color:'#5a7a9a',font:{size:10}},grid:{color:'rgba(255,255,255,0.05)'}}
+  };
+}
+
+function renderCharts(){
+  const d=filteredData;
+  const byCountry={};
+  d.forEach(r=>{const c=r.country||'Unknown';byCountry[c]=(byCountry[c]||0)+r.value_inr;});
+  const cKeys=Object.keys(byCountry).sort((a,b)=>byCountry[b]-byCountry[a]);
+
+  destroyChart('barChart');
+  chartInstances['barChart']=new Chart(document.getElementById('barChart'),{
+    type:'bar',
+    data:{labels:cKeys,datasets:[{label:'Pipeline ₹',data:cKeys.map(k=>byCountry[k]),backgroundColor:palette(cKeys.length),borderRadius:6,borderWidth:0}]},
+    options:{...chartBase(),scales:scaleBase(),plugins:{...chartBase().plugins,tooltip:{...chartBase().plugins.tooltip,callbacks:{label:ctx=>fmtINR(ctx.raw)}}}}
+  });
+
+  const byStatus={};
+  d.forEach(r=>{const s=r.lead_status||'Unknown';byStatus[s]=(byStatus[s]||0)+1;});
+  destroyChart('doughChart');
+  chartInstances['doughChart']=new Chart(document.getElementById('doughChart'),{
+    type:'doughnut',
+    data:{labels:Object.keys(byStatus),datasets:[{data:Object.values(byStatus),backgroundColor:palette(Object.keys(byStatus).length),cutout:'70%',borderWidth:0}]},
+    options:{...chartBase(),plugins:{...chartBase().plugins,legend:{position:'right',labels:{color:'white',font:{size:10},boxWidth:10}}}}
+  });
+
+  const ctx=document.getElementById('lineChart').getContext('2d');
+  const grad=ctx.createLinearGradient(0,0,0,200);
+  grad.addColorStop(0,'rgba(47,128,237,0.35)');
+  grad.addColorStop(1,'rgba(47,128,237,0.01)');
+  destroyChart('lineChart');
+  chartInstances['lineChart']=new Chart(document.getElementById('lineChart'),{
+    type:'line',
+    data:{labels:cKeys,datasets:[{label:'Pipeline ₹',data:cKeys.map(k=>byCountry[k]),borderColor:'#2f80ed',backgroundColor:grad,fill:true,tension:0.4,pointBackgroundColor:'#7c3aed',pointRadius:5,borderWidth:2}]},
+    options:{...chartBase(),scales:scaleBase(),plugins:{...chartBase().plugins,tooltip:{...chartBase().plugins.tooltip,callbacks:{label:ctx=>fmtINR(ctx.raw)}}}}
+  });
+
+  const byStage={};
+  d.forEach(r=>{const s=r.deal_stage||'Unknown';byStage[s]=(byStage[s]||0)+1;});
+  destroyChart('stageChart');
+  chartInstances['stageChart']=new Chart(document.getElementById('stageChart'),{
+    type:'doughnut',
+    data:{labels:Object.keys(byStage),datasets:[{data:Object.values(byStage),backgroundColor:palette(Object.keys(byStage).length).slice(2),cutout:'70%',borderWidth:0}]},
+    options:{...chartBase(),plugins:{...chartBase().plugins,legend:{position:'right',labels:{color:'white',font:{size:10},boxWidth:10}}}}
+  });
+
+  const bySrc={};
+  d.forEach(r=>{const s=r.lead_source||'Unknown';bySrc[s]=(bySrc[s]||0)+r.value_inr;});
+  const srcKeys=Object.keys(bySrc).sort((a,b)=>bySrc[b]-bySrc[a]);
+  const maxSrc=Math.max(...Object.values(bySrc),1);
+  document.getElementById('sourceBar').innerHTML=srcKeys.map((k,i)=>`
+    <div class="src-row">
+      <div class="src-lbl">${k}</div>
+      <div class="src-track"><div class="src-fill" style="width:${Math.round(bySrc[k]/maxSrc*100)}%;background:${PALETTE[i%PALETTE.length]}"></div></div>
+      <div class="src-val">${fmtINR(bySrc[k])}</div>
+    </div>`).join('');
+}
+
+function initMap(){
+  if(leafletMap)return;
+  leafletMap=L.map('map',{scrollWheelZoom:false}).setView([10,20],2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains:'abcd',maxZoom:19
+  }).addTo(leafletMap);
+  markerLayer=L.layerGroup().addTo(leafletMap);
+  const legend=L.control({position:'bottomright'});
+  legend.onAdd=function(){
+    const d=L.DomUtil.create('div','');
+    d.style.cssText='background:rgba(13,27,46,.85);padding:8px 12px;border-radius:8px;font-size:11px;color:#94a3b8;line-height:1.8';
+    d.innerHTML='<b style="color:#eef4ff">Map Legend</b><br>'
+      +'<span style="color:#10b981">●</span> Interested / Active<br>'
+      +'<span style="color:#2f80ed">●</span> High Value (&gt;₹5L)<br>'
+      +'<span style="color:#7c3aed">●</span> Proposal / Others<br>'
+      +'Circle size = pipeline value';
+    return d;
+  };
+  legend.addTo(leafletMap);
+}
+
+function renderMap(){
+  if(!leafletMap)return;
+  markerLayer.clearLayers();
+  fetch('/api/map')
+    .then(r=>r.json())
+    .then(data=>{
+      const countries=data.countries||[];
+      const activeCountries=new Set(filteredData.map(x=>(x.country||'').toLowerCase()));
+      countries.filter(c=>activeCountries.has((c.name||'').toLowerCase())).forEach(c=>{
+        const r=Math.min(8+Math.sqrt((c.pipeline_inr||0)/80000),40);
+        const status=(c.hot_leads||0)>0?'#10b981':(c.pipeline_inr||0)>500000?'#2f80ed':'#7c3aed';
+        const circle=L.circleMarker([c.lat,c.lng],{radius:r,fillColor:status,color:'#fff',weight:1.5,fillOpacity:0.78});
+        circle.bindTooltip(`<b>${c.name}</b><br>${fmtINR(c.pipeline_inr||0)}`,{className:'leaflet-tooltip-dark'});
+        circle.bindPopup(`<div style="font-size:13px;min-width:160px">
+          <b style="font-size:14px">${c.name}</b><br>
+          Leads: ${c.lead_count}<br>
+          Pipeline: ${fmtINR(c.pipeline_inr||0)} / ${fmtUSD(c.pipeline_usd||0)}<br>
+          Top City: ${c.top_city||'—'}<br>
+          Top Company: ${c.top_company||'—'}
+        </div>`);
+        markerLayer.addLayer(circle);
+      });
+    })
+    .catch(()=>{});
+}
+
+function renderTable(){
+  const sorted=[...filteredData].sort((a,b)=>{
+    const av=a[sortCol]??'', bv=b[sortCol]??'';
+    if(typeof av==='number')return(av-bv)*sortDir;
+    return String(av).localeCompare(String(bv))*sortDir;
+  });
+  document.getElementById('tblCount').textContent=sorted.length+' leads';
+  document.getElementById('tblBody').innerHTML=sorted.map(r=>`
+    <tr>
+      <td>${r.sno}</td>
+      <td><span style="font-weight:600">${r.company||'—'}</span></td>
+      <td>${r.contact_name||'—'}</td>
+      <td>${r.country||'—'}</td>
+      <td>${r.city||'—'}</td>
+      <td>${statusBadge(r.lead_status)}</td>
+      <td><span style="color:var(--muted);font-size:11px">${r.deal_stage||'—'}</span></td>
+      <td><span style="color:var(--muted);font-size:11px">${r.order_type||'—'}</span></td>
+      <td style="color:var(--success);font-weight:600">${r.value_inr?fmtINR(r.value_inr):'—'}</td>
+      <td style="color:var(--muted)">${r.value_usd?fmtUSD(r.value_usd):'—'}</td>
+      <td>${r.lead_source||'—'}</td>
+      <td>${r.last_contacted||'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${r.order_number||'—'}</td>
+      <td title="${(r.notes||'').replace(/"/g,'&quot;')}" style="color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;cursor:help">${(r.notes||'').substring(0,55)}${(r.notes||'').length>55?'…':''}</td>
+    </tr>`).join('');
+  document.querySelectorAll('th').forEach(th=>{th.classList.remove('sort-asc','sort-desc');});
+  const ths=document.querySelectorAll('th');
+  const cols=['sno','company','contact_name','country','city','lead_status','deal_stage','order_type','value_inr','value_usd','lead_source','last_contacted','order_number'];
+  const idx=cols.indexOf(sortCol);
+  if(idx>=0)ths[idx].classList.add(sortDir===1?'sort-asc':'sort-desc');
+}
+
+function sortTable(col){
+  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}
+  renderTable();
+}
+
+function populateFilters(){
+  const fill=(id,key)=>{
+    const el=document.getElementById(id);
+    const first=el.options[0].textContent;
+    el.innerHTML=`<option value="">${first}</option>`;
+    [...new Set(allData.map(r=>r[key]).filter(Boolean))].sort()
+      .forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;el.appendChild(o);});
+  };
+  fill('fCountry','country');fill('fStatus','lead_status');
+  fill('fStage','deal_stage');fill('fType','order_type');fill('fSource','lead_source');
+}
+
+function applyFilters(){
+  const fc=document.getElementById('fCountry').value;
+  const fs=document.getElementById('fStatus').value;
+  const fst=document.getElementById('fStage').value;
+  const ft=document.getElementById('fType').value;
+  const fsr=document.getElementById('fSource').value;
+  filteredData=allData.filter(r=>
+    (!fc||r.country===fc)&&(!fs||r.lead_status===fs)&&
+    (!fst||r.deal_stage===fst)&&(!ft||r.order_type===ft)&&(!fsr||r.lead_source===fsr));
+  renderAll();
+}
+
+function clearFilters(){
+  ['fCountry','fStatus','fStage','fType','fSource'].forEach(id=>document.getElementById(id).value='');
+  filteredData=[...allData];renderAll();
+}
+
+function renderSidebar(){
+  const totalINR=filteredData.reduce((a,b)=>a+b.value_inr,0);
+  const active=filteredData.filter(x=>{const s=(x.lead_status||'').toLowerCase();return s.includes('interest')||s.includes('negotiat');}).length;
+  const pct=filteredData.length?Math.round(active/filteredData.length*100):0;
+  const byC={};
+  filteredData.forEach(r=>{const c=r.country||'?';byC[c]=(byC[c]||0)+r.value_inr;});
+  const top=Object.entries(byC).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
+  const crit=allAlerts.filter(a=>a.urgency==='CRITICAL').length;
+  document.getElementById('sbTop').textContent=top;
+  document.getElementById('sbPipe').textContent=fmtINR(totalINR);
+  document.getElementById('sbConv').textContent=pct+'%';
+  document.getElementById('sbAlerts').textContent=allAlerts.length;
+  document.getElementById('aiInsights').textContent=window._aiInsights||'No AI data loaded yet.';
+  document.getElementById('bellCount').textContent=allAlerts.filter(a=>['CRITICAL','HIGH'].includes(a.urgency)).length;
+  document.getElementById('alertsList').innerHTML=allAlerts.length?allAlerts.map(a=>`
+    <div class="alert-card ${a.urgency==='CRITICAL'?'ac-crit':a.urgency==='HIGH'?'ac-high':'ac-med'}">
+      <div class="ac-urgency" style="color:${a.urgency==='CRITICAL'?'var(--danger)':a.urgency==='HIGH'?'var(--warning)':'var(--accent)'}">${a.urgency}</div>
+      <div class="ac-company">${a.company} — ${a.country}${a.city?', '+a.city:''}</div>
+      <div class="ac-alert">⚠ ${a.alert}</div>
+      <div class="ac-action">→ ${a.action}</div>
+      ${a.due_in_days!=null?`<div class="ac-due">Due in: ${a.due_in_days} day${a.due_in_days===1?'':'s'}</div>`:''}
+    </div>`).join(''):'<div style="color:var(--muted);font-size:12px">No urgent alerts detected.</div>';
+}
+
+function renderAll(){renderKPIs();renderCharts();renderMap();renderTable();renderSidebar();}
+
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');}
+
+function openModal(){document.getElementById('modalOverlay').classList.add('show');}
+function dismissModal(){
+  document.getElementById('modalOverlay').classList.remove('show');
+  sessionStorage.setItem('alertsDismissed','true');
+}
+
+function buildModalBody(){
+  const urgent=allAlerts.filter(a=>['CRITICAL','HIGH'].includes(a.urgency));
+  document.getElementById('modalSub').textContent=`AI has identified ${urgent.length} item${urgent.length===1?'':'s'} needing immediate attention`;
+  document.getElementById('modalBody').innerHTML=urgent.map(a=>`
+    <div class="modal-alert">
+      <span class="badge ${a.urgency==='CRITICAL'?'b-hot':'b-neg'}" style="margin-bottom:5px">${a.urgency}</span>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin:4px 0 3px">${a.company} — ${a.country}${a.city?', '+a.city:''}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:3px">⚠ ${a.alert}</div>
+      <div style="font-size:12px;color:var(--accent)">→ ${a.action}</div>
+      ${a.due_in_days!=null?`<div style="font-size:11px;color:var(--danger);margin-top:4px">Due in: ${a.due_in_days} day${a.due_in_days===1?'':'s'}</div>`:''}
+    </div>`).join('');
+}
+
+function showBanner(msg){
+  const b=document.getElementById('errorBanner');
+  b.textContent=msg;b.style.display='block';
+}
+
+async function loadData(){
+  try{
+    const res=await fetch('/api/leads');
+    if(!res.ok)throw new Error(`Server error ${res.status}`);
+    const json=await res.json();
+    allData=json.leads||[];
+    allAlerts=json.alerts||[];
+    window._aiInsights=json.ai_insights||'No AI insights available.';
+    filteredData=[...allData];
+    document.getElementById('lastUpdated').textContent=json.meta?.last_modified||'—';
+    populateFilters();
+    initMap();
+    renderAll();
+    buildModalBody();
+    if(allAlerts.filter(a=>['CRITICAL','HIGH'].includes(a.urgency)).length>0 && sessionStorage.getItem('alertsDismissed')!=='true'){
+      setTimeout(openModal,1800);
+    }
+  }catch(err){
+    showBanner(`⚠ Could not reach backend: ${err.message}. Showing demo data.`);
+    allData=DEMO_DATA;allAlerts=[];window._aiInsights='Demo mode — start the Python backend to see live AI insights.';
+    filteredData=[...allData];
+    document.getElementById('lastUpdated').textContent='Demo data';
+    populateFilters();initMap();renderAll();
+  }
+}
+
+async function doRefresh(){
+  const btn=document.getElementById('refreshBtn');
+  const sbBtn=document.getElementById('sbRefreshBtn');
+  btn.innerHTML='<span class="spin">⟳</span> Refreshing...';
+  sbBtn.innerHTML='<span class="spin">⟳</span> Refreshing...';
+  btn.disabled=true;sbBtn.disabled=true;
+  try{
+    const res=await fetch('/api/refresh',{method:'POST'});
+    if(!res.ok)throw new Error('Refresh failed');
+    const json=await res.json();
+    allData=json.leads||[];allAlerts=json.alerts||[];
+    window._aiInsights=json.ai_insights||'';
+    filteredData=[...allData];
+    document.getElementById('lastUpdated').textContent=json.meta?.last_modified||'—';
+    populateFilters();renderAll();buildModalBody();
+    sessionStorage.removeItem('alertsDismissed');
+  }catch(err){showBanner(`Refresh error: ${err.message}`);}
+  finally{
+    btn.innerHTML='⟳ Refresh';sbBtn.innerHTML='⟳ Refresh Data + Re-run AI';
+    btn.disabled=false;sbBtn.disabled=false;
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
