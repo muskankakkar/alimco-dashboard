@@ -1,4 +1,4 @@
-import sys, os, io, json, re, urllib.request, urllib.error
+import sys, os, io, json, re
 from datetime import datetime
 
 # Windows UTF-8 fix
@@ -23,8 +23,6 @@ FILE_NAME  = "exports dashboard.xlsx"
 SHEET_NAME = "Leads Data"
 HEADER_ROW = 2
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-GEMINI_MODEL   = "gemini-2.0-flash"
 
 COUNTRY_COORDS = {
     "Zambia":{"lat":-13.13,"lng":27.85},"Nigeria":{"lat":9.08,"lng":8.68},
@@ -77,6 +75,38 @@ def log(msg):
     print(line, flush=True)
 
 
+def _load_products(df):
+    global ALL_PRODUCTS
+    try:
+        # Support both TYPE and CATEGORY column names
+        type_col = "TYPE" if "TYPE" in df.columns else "CATEGORY" if "CATEGORY" in df.columns else None
+        if type_col is None:
+            log("WARNING: No TYPE or CATEGORY column found in Excel. Skipping product chart.")
+            ALL_PRODUCTS = {"categories": [], "top_products": []}
+            return
+        prod_df = df[["ITEM NAME","QUANITY", type_col]].copy()
+        prod_df = prod_df.dropna(subset=["ITEM NAME"])
+        prod_df["QUANITY"]  = pd.to_numeric(prod_df["QUANITY"], errors="coerce").fillna(0)
+        prod_df[type_col]   = prod_df[type_col].fillna("OTHER").str.strip().str.upper()
+        # Normalise variants
+        prod_df[type_col] = prod_df[type_col].replace({
+            "WHEECHAIR":"WHEELCHAIR","COMSUMABLES":"CONSUMABLES",
+            "CANE":"MOBILITY AIDS","CRUTCH":"MOBILITY AIDS","WALKER":"MOBILITY AIDS"
+        })
+        # Category totals
+        cat_totals = prod_df.groupby(type_col)["QUANITY"].sum().sort_values(ascending=False)
+        # Top 15 products by quantity
+        top_products = prod_df.groupby("ITEM NAME")["QUANITY"].sum().sort_values(ascending=False).head(15)
+        ALL_PRODUCTS = {
+            "categories": [{"name": k, "quantity": int(v)} for k, v in cat_totals.items()],
+            "top_products": [{"name": k, "quantity": int(v)} for k, v in top_products.items()],
+        }
+        log(f"Loaded {len(ALL_PRODUCTS['top_products'])} products, {len(ALL_PRODUCTS['categories'])} categories")
+    except Exception as e:
+        log(f"Product load error: {e}")
+        ALL_PRODUCTS = {"categories": [], "top_products": []}
+
+
 def load_excel():
     global ALL_LEADS, FILE_MTIME
     try:
@@ -122,110 +152,21 @@ def load_excel():
         ALL_LEADS = leads
         FILE_MTIME = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
         log(f"Loaded {len(ALL_LEADS)} leads from {path}")
+        # Load product/category data from ITEM NAME, QUANITY, TYPE columns
+        _load_products(df)
     except Exception as e:
         log(f"ERROR loading Excel: {e}. Using demo data.")
         ALL_LEADS = list(DEMO_DATA)
         FILE_MTIME = "Demo data (error)"
 
 
-def gemini_chat(system_msg, user_msg, max_tokens=900):
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not set in .env")
-    url = GEMINI_API_URL.format(model=GEMINI_MODEL, key=api_key)
-    combined = f"{system_msg}\n\n{user_msg}"
-    payload = json.dumps({
-        "contents": [{"parts": [{"text": combined}]}],
-        "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.4},
-    }).encode("utf-8")
-    req = urllib.request.Request(url, data=payload,
-        headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-
-
-def parse_alerts(raw):
-    try:
-        cleaned = re.sub(r"```(?:json)?|```", "", raw).strip()
-        alerts = json.loads(cleaned)
-        if not isinstance(alerts, list):
-            alerts = []
-        required = {"company","country","city","urgency","alert","action","due_in_days"}
-        alerts = [a for a in alerts if isinstance(a, dict) and required.issubset(a.keys())]
-        order = {"CRITICAL":0,"HIGH":1,"MEDIUM":2}
-        alerts.sort(key=lambda x: order.get(x.get("urgency","MEDIUM"), 2))
-        return alerts
-    except Exception as e:
-        log(f"Alert parse error: {e}")
-        return []
-
 
 def run_ai(leads):
     global AI_INSIGHTS, AI_ALERTS, AI_READY
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    if not api_key:
-        AI_INSIGHTS = "AI unavailable — add GEMINI_API_KEY to .env (free at aistudio.google.com)"
-        AI_ALERTS = []
-        AI_READY = False
-        log("GEMINI_API_KEY not set. Skipping AI.")
-        return
-
-    condensed = [{k:v for k,v in lead.items() if k in
-        ("company","country","city","lead_status","deal_stage","order_type",
-         "value_inr","value_usd","lead_source","last_contacted","notes")}
-        for lead in leads]
-
-    briefing_system = (
-        "You are a senior export strategy consultant. Write concise data-driven "
-        "executive briefings. Always cite specific numbers. Max 320 words. "
-        "Use bold headings and numbered points."
-    )
-    briefing_user = (
-        f"Analyse this export pipeline and write a briefing.\n\nDATA:\n"
-        f"{json.dumps(condensed, ensure_ascii=False)}\n\n"
-        "Write these 6 sections:\n"
-        "**1. PIPELINE OVERVIEW** - total leads, INR/USD value, countries\n"
-        "**2. TOP 3 MARKETS** - by order value with INR amounts\n"
-        "**3. DEAL STAGE HEALTH** - where leads are clustering\n"
-        "**4. LEAD SOURCE PERFORMANCE** - which sources generate most value\n"
-        "**5. STRATEGIC RECOMMENDATIONS** - two specific actions\n"
-        "**6. RISK WATCH** - one concrete risk in the data"
-    )
-    try:
-        log("AI Call A — Executive Briefing via Gemini...")
-        AI_INSIGHTS = gemini_chat(briefing_system, briefing_user, max_tokens=900)
-        log("AI Call A complete.")
-    except Exception as e:
-        log(f"AI Call A error: {e}")
-        AI_INSIGHTS = f"Briefing unavailable: {e}"
-
-    notes_data = [{"company":l.get("company",""),"country":l.get("country",""),
-                   "city":l.get("city",""),"notes":l.get("notes","")}
-                  for l in leads if l.get("notes","").strip()]
-
-    alerts_system = (
-        "You are an export operations analyst. "
-        "CRITICAL: Respond with ONLY a valid JSON array, no other text, no code fences. "
-        "If nothing urgent, return: []"
-    )
-    alerts_user = (
-        f"Scan these lead notes and return urgent items as JSON array.\n"
-        f"Each object needs: company, country, city, urgency (CRITICAL/HIGH/MEDIUM), "
-        f"alert (1 sentence), action (1 sentence), due_in_days (int or null).\n\n"
-        f"LEADS:\n{json.dumps(notes_data, ensure_ascii=False)}\n\n"
-        f"Return ONLY the JSON array."
-    )
-    try:
-        log("AI Call B — Urgent Alerts via Gemini...")
-        raw = gemini_chat(alerts_system, alerts_user, max_tokens=1000)
-        AI_ALERTS = parse_alerts(raw)
-        log(f"AI Call B complete. {len(AI_ALERTS)} alerts found.")
-        AI_READY = True
-    except Exception as e:
-        log(f"AI Call B error: {e}")
-        AI_ALERTS = []
-        AI_READY = False
+    AI_INSIGHTS = ""
+    AI_ALERTS   = []
+    AI_READY    = False
+    log("AI features disabled.")
 
 
 def build_meta():
@@ -251,7 +192,7 @@ def index():
 @app.route("/api/leads")
 def api_leads():
     return jsonify({"leads":ALL_LEADS,"ai_insights":AI_INSIGHTS,
-                    "alerts":AI_ALERTS,"meta":build_meta()})
+                    "alerts":AI_ALERTS,"products":ALL_PRODUCTS,"meta":build_meta()})
 
 
 @app.route("/api/alerts")
@@ -291,6 +232,11 @@ def api_map():
     return jsonify({"countries":result})
 
 
+@app.route("/api/products")
+def api_products():
+    return jsonify(ALL_PRODUCTS)
+
+
 @app.route("/api/refresh", methods=["POST"])
 def api_refresh():
     init_data()
@@ -302,7 +248,7 @@ def api_refresh():
 def api_health():
     return jsonify({"status":"ok","leads_loaded":len(ALL_LEADS),
                     "ai_ready":AI_READY,"sheet":SHEET_NAME,
-                    "ai_provider":"Google Gemini","model":GEMINI_MODEL})
+                    "ai_provider":"disabled","model":"none"})
 
 
 # ── STARTUP ──────────────────────────────────────────────────────────────────

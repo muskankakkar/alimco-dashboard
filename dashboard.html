@@ -227,6 +227,19 @@ tr:hover td{background:rgba(255,255,255,0.02)}
     <div id="sourceBar"></div>
   </div>
 
+  <!-- ── PRODUCT DEMAND SECTION ─────────────────────────────── -->
+  <div class="chart-card" style="grid-column:span 1">
+    <div class="card-title">📦 Most Demanded Product Categories Globally</div>
+    <div class="chart-wrap" style="height:280px"><canvas id="catChart"></canvas></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="chart-card" style="grid-column:span 2">
+      <div class="card-title">🏆 Top 15 Most Ordered Products</div>
+      <div class="chart-wrap" style="height:320px"><canvas id="topProductChart"></canvas></div>
+    </div>
+  </div>
+
   <div class="tbl-card">
     <div class="tbl-hdr">
       <div class="card-title" style="margin:0">📋 Export Leads</div>
@@ -578,6 +591,7 @@ function renderSidebar(){
 }
 
 function renderAll(){renderKPIs();renderCharts();renderMap();renderTable();renderSidebar();}
+function renderAllWithProducts(products){renderAll();renderProductCharts(products);}
 
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');}
@@ -606,6 +620,83 @@ function showBanner(msg){
   b.textContent=msg;b.style.display='block';
 }
 
+function renderProductCharts(products){
+  if(!products) return;
+
+  const cats     = products.categories  || [];
+  const topProds = products.top_products|| [];
+
+  // ── Category Chart (Horizontal Bar) ──────────────────────────
+  destroyChart('catChart');
+  if(cats.length){
+    chartInstances['catChart'] = new Chart(document.getElementById('catChart'),{
+      type:'bar',
+      data:{
+        labels: cats.map(c=>c.name),
+        datasets:[{
+          label:'Total Units Ordered',
+          data:  cats.map(c=>c.quantity),
+          backgroundColor: cats.map((_,i)=>PALETTE[i%PALETTE.length]),
+          borderRadius:6,borderWidth:0,
+        }]
+      },
+      options:{
+        indexAxis:'y',
+        responsive:true,maintainAspectRatio:false,
+        animation:{duration:1200},
+        plugins:{
+          legend:{display:false},
+          tooltip:{backgroundColor:'#111827',titleColor:'white',bodyColor:'white',
+            callbacks:{label:ctx=>' '+ctx.raw.toLocaleString()+' units'}}
+        },
+        scales:{
+          x:{ticks:{color:'#5a7a9a',font:{size:10}},grid:{color:'rgba(255,255,255,0.05)'},
+             title:{display:true,text:'Total Quantity Ordered',color:'#5a7a9a',font:{size:11}}},
+          y:{ticks:{color:'white',font:{size:11}},grid:{color:'rgba(255,255,255,0.03)'}}
+        }
+      }
+    });
+  }
+
+  // ── Top Products Chart (Vertical Bar) ────────────────────────
+  destroyChart('topProductChart');
+  if(topProds.length){
+    // Truncate long names
+    const labels = topProds.map(p=>p.name.length>30?p.name.substring(0,28)+'…':p.name);
+    chartInstances['topProductChart'] = new Chart(document.getElementById('topProductChart'),{
+      type:'bar',
+      data:{
+        labels,
+        datasets:[{
+          label:'Units Ordered',
+          data: topProds.map(p=>p.quantity),
+          backgroundColor: topProds.map((_,i)=>PALETTE[i%PALETTE.length]),
+          borderRadius:6,borderWidth:0,
+        }]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        animation:{duration:1200},
+        plugins:{
+          legend:{display:false},
+          tooltip:{
+            backgroundColor:'#111827',titleColor:'white',bodyColor:'white',
+            callbacks:{
+              title:ctx=>[topProds[ctx[0].dataIndex].name],
+              label:ctx=>' '+ctx.raw.toLocaleString()+' units'
+            }
+          }
+        },
+        scales:{
+          x:{ticks:{color:'#5a7a9a',font:{size:9},maxRotation:35},grid:{color:'rgba(255,255,255,0.05)'}},
+          y:{ticks:{color:'#5a7a9a',font:{size:10}},grid:{color:'rgba(255,255,255,0.05)'},
+             title:{display:true,text:'Quantity',color:'#5a7a9a',font:{size:11}}}
+        }
+      }
+    });
+  }
+}
+
 async function loadData(){
   try{
     const res=await fetch('/api/leads');
@@ -619,6 +710,7 @@ async function loadData(){
     populateFilters();
     initMap();
     renderAll();
+    renderProductCharts(json.products || {});
     buildModalBody();
     if(allAlerts.filter(a=>['CRITICAL','HIGH'].includes(a.urgency)).length>0 && sessionStorage.getItem('alertsDismissed')!=='true'){
       setTimeout(openModal,1800);
@@ -647,6 +739,7 @@ async function doRefresh(){
     filteredData=[...allData];
     document.getElementById('lastUpdated').textContent=json.meta?.last_modified||'—';
     populateFilters();renderAll();buildModalBody();
+    renderProductCharts(json.products || {});
     sessionStorage.removeItem('alertsDismissed');
   }catch(err){showBanner(`Refresh error: ${err.message}`);}
   finally{
