@@ -1,262 +1,146 @@
-import sys, os, io, json, re
+"""
+ALIMCO Export Dashboard — Google Sheets Live Sync
+==================================================
+Set SHEET_URL environment variable in Railway to your
+Google Sheets published CSV link.
+Dashboard auto-refreshes every 30 seconds from the sheet.
+"""
+
+import os, io, csv, time
 from datetime import datetime
-
-# Windows UTF-8 fix
-if sys.platform == "win32":
-    try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-    except Exception:
-        pass
-
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
-import pandas as pd
-from dotenv import load_dotenv
+import urllib.request as urlreq
 
-load_dotenv()
-
-app  = Flask(__name__)
+app  = Flask(__name__, static_folder=".")
 CORS(app)
 
-FILE_NAME  = "exports dashboard.xlsx"
-SHEET_NAME = "Leads Data"
-HEADER_ROW = 2
+SHEET_URL = os.environ.get("SHEET_URL", "")
+CACHE_TTL = 30
+_cache    = {"data": None, "ts": 0}
 
-
-COUNTRY_COORDS = {
-    "Zambia":{"lat":-13.13,"lng":27.85},"Nigeria":{"lat":9.08,"lng":8.68},
-    "Bangladesh":{"lat":23.68,"lng":90.35},"Togo":{"lat":8.62,"lng":0.82},
-    "Iraq":{"lat":33.22,"lng":43.68},"Mongolia":{"lat":46.86,"lng":103.85},
-    "Turkmenistan":{"lat":38.97,"lng":59.56},"South Africa":{"lat":-30.56,"lng":22.94},
-    "Tanzania":{"lat":-6.37,"lng":34.89},"India":{"lat":20.59,"lng":78.96},
-    "UAE":{"lat":23.42,"lng":53.85},"Egypt":{"lat":26.82,"lng":30.80},
-    "Kenya":{"lat":-0.02,"lng":37.91},"Ethiopia":{"lat":9.15,"lng":40.49},
-    "Ghana":{"lat":7.95,"lng":-1.02},"Uganda":{"lat":1.37,"lng":32.29},
-    "Nepal":{"lat":28.39,"lng":84.12},"Sri Lanka":{"lat":7.87,"lng":80.77},
-    "Philippines":{"lat":12.88,"lng":121.77},"Indonesia":{"lat":-0.79,"lng":113.92},
-    "Malaysia":{"lat":4.21,"lng":101.98},"Thailand":{"lat":15.87,"lng":100.99},
-    "Vietnam":{"lat":14.06,"lng":108.28},"Pakistan":{"lat":30.38,"lng":69.35},
-    "Saudi Arabia":{"lat":23.89,"lng":45.08},"Oman":{"lat":21.51,"lng":55.92},
-    "Jordan":{"lat":30.59,"lng":36.24},"Morocco":{"lat":31.79,"lng":-7.09},
-    "Senegal":{"lat":14.50,"lng":-14.45},"Cameroon":{"lat":3.85,"lng":11.50},
-    "Mozambique":{"lat":-18.67,"lng":35.53},"Zimbabwe":{"lat":-19.02,"lng":29.15},
-    "Rwanda":{"lat":-1.94,"lng":29.87},"Angola":{"lat":-11.20,"lng":17.87},
-    "Zambia":{"lat":-13.13,"lng":27.85},"Malawi":{"lat":-13.25,"lng":34.30},
-    "Botswana":{"lat":-22.33,"lng":24.68},"Namibia":{"lat":-22.96,"lng":18.49},
-    "Germany":{"lat":51.17,"lng":10.45},"France":{"lat":46.23,"lng":2.21},
-    "Japan":{"lat":36.20,"lng":138.25},"Singapore":{"lat":1.35,"lng":103.82},
-    "Australia":{"lat":-25.27,"lng":133.78},
+COORDS = {
+    "zambia":       (-15.4166,  28.2833),
+    "nigeria":      (  6.5244,   3.3792),
+    "bangladesh":   ( 23.8103,  90.4125),
+    "togo":         (  6.1374,   1.2123),
+    "iraq":         ( 33.3128,  44.3615),
+    "mongolia":     ( 47.8864, 106.9057),
+    "turkmenistan": ( 37.9601,  58.3261),
+    "south africa": (-26.2041,  28.0473),
+    "tanzania":     ( -6.7924,  39.2083),
+    "kenya":        ( -1.2921,  36.8219),
+    "ethiopia":     (  9.0054,  38.7636),
+    "egypt":        ( 30.0444,  31.2357),
+    "ghana":        (  5.6037,  -0.1870),
+    "uae":          ( 25.2048,  55.2708),
+    "saudi arabia": ( 24.7136,  46.6753),
+    "thailand":     ( 13.7563, 100.5018),
+    "philippines":  ( 14.5995, 120.9842),
+    "vietnam":      ( 21.0278, 105.8342),
+    "nepal":        ( 27.7172,  85.3240),
+    "sri lanka":    (  6.9271,  79.8612),
+    "iran":         ( 35.6892,  51.3890),
 }
 
-DEMO_DATA = [
-    {"sno":1,"company":"Afrimed Pharmaceutical Ltd.","contact_name":"Mr. Hyder Khan","last_contacted":"2026-03-01","order_number":"100 BTE TD 0E 17036","order_type":"Product Supply","value_inr":680256,"value_usd":8503.2,"lead_source":"Email","lead_status":"Interested","deal_stage":"Negotiating","email":"afrimedpharmaceuticals@gmail.com","country":"Zambia","city":"LUSAKA","pin_code":"10101","contact_number":"+260 979 328887","notes":"Interested in Hearing Aids","last_updated":"2026-05-19"},
-    {"sno":2,"company":"SJS Life Sciences Ltd.","contact_name":"Jitendra Pandey","last_contacted":"2026-05-12","order_number":"101 BTE TD 0E 17036","order_type":"Product Supply","value_inr":680256,"value_usd":8503.2,"lead_source":"Email","lead_status":"Negotiating","deal_stage":"Negotiating","email":"jkpandey3s@gmail.com","country":"Nigeria","city":"LAGOS","pin_code":"100271","contact_number":"+2348128444444","notes":"Interested in Hearing Aids","last_updated":"2026-05-19"},
-    {"sno":3,"company":"Medikit Corporation","contact_name":"Md. Mamunor Rashid","last_contacted":"2026-04-07","order_number":"MULTIPLE ASSISTIVE DEVICES","order_type":"Product Supply","value_inr":62458200,"value_usd":780727.5,"lead_source":"Email","lead_status":"Not Interested","deal_stage":"Closed - Lost","email":"s.johnson@texmart.us","country":"Bangladesh","city":"Dhaka","pin_code":"1206","contact_number":"+2348128444444","notes":"Responded to email","last_updated":"2026-05-19"},
-    {"sno":4,"company":"Kamsitoc Global Trading Sarl","contact_name":"Comrade Kwaku Jojo","last_contacted":"2026-01-05","order_number":"MULTIPLE ASSISTIVE DEVICES","order_type":"Product Supply","value_inr":45000,"value_usd":562.5,"lead_source":"Email","lead_status":"Interested","deal_stage":"Negotiating","email":"kwakujojo.7@gmail.com","country":"Togo","city":"Lome","pin_code":"42041","contact_number":"+22898191726","notes":"export pricing required","last_updated":"2026-05-19"},
-    {"sno":5,"company":"JMB Entity","contact_name":"Dr. Rasar Rahim","last_contacted":"","order_number":"","order_type":"Product Supply","value_inr":0,"value_usd":0,"lead_source":"ITEC","lead_status":"Reply to be Given","deal_stage":"Proposal","email":"rasarrebwar@gmail.com","country":"Iraq","city":"","pin_code":"","contact_number":"","notes":"export pricing required","last_updated":""},
-    {"sno":6,"company":"Mongolian Burn Association","contact_name":"Dr. Batorgil Enkhbayar","last_contacted":"2026-02-26","order_number":"phased collaboration","order_type":"Phased Collaboration","value_inr":0,"value_usd":0,"lead_source":"Email","lead_status":"Reply to be Given","deal_stage":"Proposal","email":"btrglcx98@gmail.com","country":"Mongolia","city":"","pin_code":"","contact_number":"","notes":"email to be replied","last_updated":""},
-    {"sno":7,"company":"JMB Pharmaceuticals Pvt. Ltd.","contact_name":"Krishna Mehta","last_contacted":"2026-03-12","order_number":"orthotics and prosthetics","order_type":"Product Supply","value_inr":0,"value_usd":0,"lead_source":"Email","lead_status":"Reply to be Given","deal_stage":"Proposal","email":"wessely@jmbpharma.com","country":"Turkmenistan","city":"","pin_code":"","contact_number":"+91-9082004363","notes":"email to be replied","last_updated":""},
-    {"sno":8,"company":"Tripalogix Pty Ltd","contact_name":"Karabo Motsamai Vuso","last_contacted":"2026-02-23","order_number":"MULTIPLE ASSISTIVE DEVICES","order_type":"Product Supply","value_inr":0,"value_usd":0,"lead_source":"Email","lead_status":"Reply to be Given","deal_stage":"Proposal","email":"tripalogix@gmail.com","country":"South Africa","city":"","pin_code":"","contact_number":"0615414005","notes":"email to be replied","last_updated":""},
-    {"sno":9,"company":"Kamal Group","contact_name":"Mr. Sameer Santosh","last_contacted":"2026-05-18","order_number":"","order_type":"Phased Collaboration","value_inr":0,"value_usd":0,"lead_source":"Visit","lead_status":"Interested","deal_stage":"Proposal","email":"md@kamal-group.co.tz","country":"Tanzania","city":"Dar es Salaam","pin_code":"10392","contact_number":"+255 767 624 571","notes":"reply awaited","last_updated":""},
-    {"sno":10,"company":"METL","contact_name":"Mr. Gulam Dewji","last_contacted":"2026-05-18","order_number":"","order_type":"Phased Collaboration","value_inr":0,"value_usd":0,"lead_source":"Visit","lead_status":"Interested","deal_stage":"Proposal","email":"gd@metl.net","country":"Tanzania","city":"Dar es Salaam","pin_code":"20660","contact_number":"+255 754 600 000","notes":"reply awaited","last_updated":""},
+FALLBACK = [
+    {"sno":1,"company":"Afrimed Pharmaceutical Ltd.","contact":"Mr. Hyder Khan","country":"Zambia","status":"Interested","stage":"Negotiating","type":"Product Supply","source":"Email","value_inr":680256,"value_usd":8503.2,"notes":"Interested in Hearing Aids","lat":-15.4166,"lng":28.2833},
+    {"sno":2,"company":"SJS Life Sciences Ltd.","contact":"Jitendra Pandey","country":"Nigeria","status":"Negotiating","stage":"Negotiating","type":"Product Supply","source":"Email","value_inr":680256,"value_usd":8503.2,"notes":"Interested in Hearing Aids","lat":6.5244,"lng":3.3792},
+    {"sno":3,"company":"Medikit Corporation","contact":"Md. Mamunor Rashid","country":"Bangladesh","status":"Not Interested","stage":"Closed - Lost","type":"Product Supply","source":"Email","value_inr":62458200,"value_usd":780727.5,"notes":"Responded to email","lat":23.8103,"lng":90.4125},
+    {"sno":4,"company":"Kamsitoc Global Trading Sarl","contact":"Comrade Kwaku Jojo","country":"Togo","status":"Interested","stage":"Negotiating","type":"Product Supply","source":"Email","value_inr":45000,"value_usd":562.5,"notes":"Export pricing required","lat":6.1374,"lng":1.2123},
+    {"sno":5,"company":"(Unnamed Lead)","contact":"Dr. Rasar Rahim","country":"Iraq","status":"Reply to be Given","stage":"Proposal","type":"Product Supply","source":"ITEC","value_inr":0,"value_usd":0,"notes":"Export pricing required","lat":33.3128,"lng":44.3615},
+    {"sno":6,"company":"Mongolian Burn Association","contact":"Dr. Batorgil Enkhbayar","country":"Mongolia","status":"Reply to be Given","stage":"Proposal","type":"Phased Collaboration","source":"Email","value_inr":0,"value_usd":0,"notes":"Email to be replied","lat":47.8864,"lng":106.9057},
+    {"sno":7,"company":"JMB Pharmaceuticals Pvt. Ltd.","contact":"Krishna Mehta","country":"Turkmenistan","status":"Reply to be Given","stage":"Proposal","type":"Product Supply","source":"Email","value_inr":0,"value_usd":0,"notes":"Email to be replied","lat":37.9601,"lng":58.3261},
+    {"sno":8,"company":"Tripalogix Pty Ltd","contact":"Karabo Motsamai Vuso","country":"South Africa","status":"Reply to be Given","stage":"Proposal","type":"Product Supply","source":"Email","value_inr":0,"value_usd":0,"notes":"Email to be replied","lat":-26.2041,"lng":28.0473},
+    {"sno":9,"company":"Kamal Group","contact":"Mr. Sameer Santosh","country":"Tanzania","status":"Interested","stage":"Proposal","type":"Phased Collaboration","source":"Visit","value_inr":0,"value_usd":0,"notes":"Reply awaited","lat":-6.7924,"lng":39.2083},
+    {"sno":10,"company":"METL","contact":"Mr. Gulam Dewji","country":"Tanzania","status":"Interested","stage":"Proposal","type":"Phased Collaboration","source":"Visit","value_inr":0,"value_usd":0,"notes":"Reply awaited","lat":-6.7924,"lng":39.2083},
 ]
 
-AI_INSIGHTS = ""
-AI_ALERTS   = []
-ALL_LEADS   = []
-AI_READY    = False
-FILE_MTIME  = ""
-
-
-def log(msg):
-    ts = datetime.now().strftime("%H:%M:%S")
-    line = f"[{ts}] {msg}"
-    print(line, flush=True)
-
-
-def _load_products(df):
-    global ALL_PRODUCTS
+def fetch_sheet():
+    global _cache
+    if not SHEET_URL:
+        return None, "SHEET_URL not set"
+    if _cache["data"] and time.time() - _cache["ts"] < CACHE_TTL:
+        return _cache["data"], None
     try:
-        # Support both TYPE and CATEGORY column names
-        type_col = "TYPE" if "TYPE" in df.columns else "CATEGORY" if "CATEGORY" in df.columns else None
-        if type_col is None:
-            log("WARNING: No TYPE or CATEGORY column found in Excel. Skipping product chart.")
-            ALL_PRODUCTS = {"categories": [], "top_products": []}
-            return
-        prod_df = df[["ITEM NAME","QUANITY", type_col]].copy()
-        prod_df = prod_df.dropna(subset=["ITEM NAME"])
-        prod_df["QUANITY"]  = pd.to_numeric(prod_df["QUANITY"], errors="coerce").fillna(0)
-        prod_df[type_col]   = prod_df[type_col].fillna("OTHER").str.strip().str.upper()
-        # Normalise variants
-        prod_df[type_col] = prod_df[type_col].replace({
-            "WHEECHAIR":"WHEELCHAIR","COMSUMABLES":"CONSUMABLES",
-            "CANE":"MOBILITY AIDS","CRUTCH":"MOBILITY AIDS","WALKER":"MOBILITY AIDS"
-        })
-        # Category totals
-        cat_totals = prod_df.groupby(type_col)["QUANITY"].sum().sort_values(ascending=False)
-        # Top 15 products by quantity
-        top_products = prod_df.groupby("ITEM NAME")["QUANITY"].sum().sort_values(ascending=False).head(15)
-        ALL_PRODUCTS = {
-            "categories": [{"name": k, "quantity": int(v)} for k, v in cat_totals.items()],
-            "top_products": [{"name": k, "quantity": int(v)} for k, v in top_products.items()],
-        }
-        log(f"Loaded {len(ALL_PRODUCTS['top_products'])} products, {len(ALL_PRODUCTS['categories'])} categories")
+        req = urlreq.Request(SHEET_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urlreq.urlopen(req, timeout=10) as r:
+            raw = r.read().decode("utf-8")
     except Exception as e:
-        log(f"Product load error: {e}")
-        ALL_PRODUCTS = {"categories": [], "top_products": []}
+        return None, str(e)
 
+    rows = list(csv.reader(io.StringIO(raw)))
+    if len(rows) < 2:
+        return None, "Sheet empty"
 
-def load_excel():
-    global ALL_LEADS, FILE_MTIME
-    try:
-        path = FILE_NAME
-        if not os.path.exists(path):
-            for alt in ["exports_dashbaord.xlsx", "exports_dashboard.xlsx"]:
-                if os.path.exists(alt):
-                    path = alt
-                    break
-        if not os.path.exists(path):
-            log(f"WARNING: {FILE_NAME} not found. Using demo data.")
-            ALL_LEADS = list(DEMO_DATA)
-            FILE_MTIME = "Demo data"
-            return
-        df = pd.read_excel(path, sheet_name=SHEET_NAME, engine="openpyxl", header=HEADER_ROW)
-        df.columns = df.columns.str.strip()
-        df = df.dropna(subset=["SNO."]).copy()
-        df["value_inr"] = pd.to_numeric(df.get("Order Value (₹ INR)", 0), errors="coerce").fillna(0)
-        df["value_usd"] = pd.to_numeric(df.get("Order Value ($ USD)", 0), errors="coerce").fillna(0)
-        str_cols = {
-            "SNO.":"sno","Company Name":"company","Contact Person":"contact_name",
-            "Last Contacted":"last_contacted","Order #":"order_number",
-            "Order Type":"order_type","Lead Source":"lead_source",
-            "Lead Status":"lead_status","Deal Stage":"deal_stage",
-            "Email Address":"email","Country":"country","City":"city",
-            "Pin Code":"pin_code","Contact Number":"contact_number",
-            "Notes":"notes","Last Updated":"last_updated",
-        }
-        leads = []
-        for _, row in df.iterrows():
-            lead = {"value_inr": float(row["value_inr"]), "value_usd": float(row["value_usd"])}
-            for col, key in str_cols.items():
-                val = row.get(col, "")
-                if pd.isna(val) or str(val).strip() in ("NaT","nan","None"):
-                    lead[key] = ""
-                else:
-                    lead[key] = str(val).strip().title() if key == "country" else str(val).strip()
-            try:
-                lead["sno"] = int(float(lead["sno"]))
-            except Exception:
-                lead["sno"] = 0
-            leads.append(lead)
-        ALL_LEADS = leads
-        FILE_MTIME = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
-        log(f"Loaded {len(ALL_LEADS)} leads from {path}")
-        # Load product/category data from ITEM NAME, QUANITY, TYPE columns
-        _load_products(df)
-    except Exception as e:
-        log(f"ERROR loading Excel: {e}. Using demo data.")
-        ALL_LEADS = list(DEMO_DATA)
-        FILE_MTIME = "Demo data (error)"
+    hi = next((i for i,row in enumerate(rows)
+               if any("company" in c.lower() for c in row)
+               and any("country" in c.lower() for c in row)), None)
+    if hi is None:
+        return None, "Header not found"
 
+    hdrs = [c.lower().strip() for c in rows[hi]]
 
+    def ci(*kws):
+        for kw in kws:
+            for i,h in enumerate(hdrs):
+                if kw in h: return i
+        return -1
 
-def run_ai(leads):
-    global AI_INSIGHTS, AI_ALERTS, AI_READY
-    AI_INSIGHTS = ""
-    AI_ALERTS   = []
-    AI_READY    = False
-    log("AI features disabled.")
+    idx = dict(
+        company=ci("company name","company"), contact=ci("contact person","contact"),
+        country=ci("country"), status=ci("lead status","status"),
+        stage=ci("deal stage","stage"), type=ci("order type","type"),
+        source=ci("lead source","source"), val_inr=ci("₹ inr","inr","value (₹","order value"),
+        val_usd=ci("$ usd","usd"), notes=ci("notes"), date=ci("last contacted","date"), city=ci("city"),
+    )
 
+    def g(row,k):
+        i=idx.get(k,-1)
+        return row[i].strip() if 0<=i<len(row) else ""
+    def gf(row,k):
+        try: return float(g(row,k).replace(",","").replace("₹","").replace("$",""))
+        except: return 0.0
 
-def build_meta():
-    total_inr = sum(l.get("value_inr", 0) for l in ALL_LEADS)
-    total_usd = sum(l.get("value_usd", 0) for l in ALL_LEADS)
-    countries  = len(set(l.get("country","") for l in ALL_LEADS if l.get("country")))
-    return {"file":FILE_NAME,"sheet":SHEET_NAME,"last_modified":FILE_MTIME,
-            "total_leads":len(ALL_LEADS),"total_pipeline_inr":round(total_inr,2),
-            "total_pipeline_usd":round(total_usd,2),"countries_count":countries,
-            "ai_ready":AI_READY}
+    leads=[]
+    for sno,row in enumerate(rows[hi+1:],1):
+        if len(row)<3: continue
+        co=g(row,"company"); ct=g(row,"country")
+        if not co and not ct: continue
+        coord=COORDS.get(ct.lower().strip(),(None,None))
+        leads.append(dict(sno=sno,company=co or "(Unnamed)",contact=g(row,"contact"),
+            country=ct.title() if ct else "—",city=g(row,"city"),status=g(row,"status"),
+            stage=g(row,"stage"),type=g(row,"type"),source=g(row,"source"),
+            value_inr=gf(row,"val_inr"),value_usd=gf(row,"val_usd"),
+            notes=g(row,"notes"),date=g(row,"date"),lat=coord[0],lng=coord[1]))
 
-
-def init_data():
-    load_excel()
-    run_ai(ALL_LEADS)
-
-
-@app.route("/")
-def index():
-    return send_file("dashboard.html")
-
+    result={"leads":leads,"meta":{"total":len(leads),"source":"google_sheets",
+        "last_modified":datetime.now().strftime("%d %b %Y, %I:%M:%S %p"),
+        "file":"Google Sheets (live sync)"}}
+    _cache={"data":result,"ts":time.time()}
+    return result, None
 
 @app.route("/api/leads")
 def api_leads():
-    return jsonify({"leads":ALL_LEADS,"ai_insights":AI_INSIGHTS,
-                    "alerts":AI_ALERTS,"products":ALL_PRODUCTS,"meta":build_meta()})
+    data, err = fetch_sheet()
+    if err:
+        return jsonify({"leads":FALLBACK,"meta":{"total":len(FALLBACK),"source":"fallback",
+            "last_modified":datetime.now().strftime("%d %b %Y, %I:%M %p"),
+            "file":"Embedded data — add SHEET_URL in Railway vars","warning":err}})
+    return jsonify(data)
 
+@app.route("/api/status")
+def status():
+    return jsonify({"sheet_configured":bool(SHEET_URL),
+        "cache_age":round(time.time()-_cache["ts"]) if _cache["ts"] else None})
 
-@app.route("/api/alerts")
-def api_alerts():
-    return jsonify({"alerts":AI_ALERTS})
-
-
-@app.route("/api/map")
-def api_map():
-    agg = {}
-    for lead in ALL_LEADS:
-        c = lead.get("country","").strip()
-        if not c:
-            continue
-        if c not in agg:
-            agg[c] = {"name":c,"lead_count":0,"pipeline_inr":0.0,
-                      "pipeline_usd":0.0,"hot_leads":0,"top_city":"","top_company":""}
-        a = agg[c]
-        a["lead_count"] += 1
-        a["pipeline_inr"] += lead.get("value_inr",0)
-        a["pipeline_usd"] += lead.get("value_usd",0)
-        if any(x in lead.get("lead_status","").lower() for x in ("hot","interest","negot")):
-            a["hot_leads"] += 1
-        if lead.get("city") and not a["top_city"]:
-            a["top_city"] = lead["city"]
-        if lead.get("company") and not a["top_company"]:
-            a["top_company"] = lead["company"]
-    result = []
-    for name, a in agg.items():
-        coords = COUNTRY_COORDS.get(name)
-        if coords:
-            a["lat"] = coords["lat"]
-            a["lng"] = coords["lng"]
-            a["pipeline_inr"] = round(a["pipeline_inr"], 2)
-            a["pipeline_usd"] = round(a["pipeline_usd"], 2)
-            result.append(a)
-    return jsonify({"countries":result})
-
-
-@app.route("/api/products")
-def api_products():
-    return jsonify(ALL_PRODUCTS)
-
-
-@app.route("/api/refresh", methods=["POST"])
-def api_refresh():
-    init_data()
-    return jsonify({"leads":ALL_LEADS,"ai_insights":AI_INSIGHTS,
-                    "alerts":AI_ALERTS,"meta":build_meta()})
-
-
-@app.route("/api/health")
-def api_health():
-    return jsonify({"status":"ok","leads_loaded":len(ALL_LEADS),
-                    "ai_ready":AI_READY,"sheet":SHEET_NAME,
-                    "ai_provider":"disabled","model":"none"})
-
-
-# ── STARTUP ──────────────────────────────────────────────────────────────────
-log("Starting ALIMCO Export Intelligence Dashboard...")
-init_data()
-log("Startup complete. Flask is ready.")
+@app.route("/")
+def index():
+    return send_from_directory(".","dashboard.html")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    log(f"Running on http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    port=int(os.environ.get("PORT",5000))
+    print(f"\n{'='*50}\n  ALIMCO Export Dashboard")
+    print(f"  SHEET_URL: {'✅ set' if SHEET_URL else '❌ NOT SET'}")
+    print(f"  Port: {port}\n{'='*50}\n")
+    app.run(host="0.0.0.0",port=port,debug=False)

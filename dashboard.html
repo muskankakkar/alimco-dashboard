@@ -1,892 +1,561 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>ALIMCO AI Export Intelligence Dashboard</title>
-
-<!-- CHART JS -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ALIMCO Export Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-
+*{margin:0;padding:0;box-sizing:border-box}
 :root{
-    --bg:#0f172a;
-    --card:#111827;
-    --border:rgba(255,255,255,0.08);
-    --text:#ffffff;
-    --muted:#94a3b8;
+  --bg:#0a0f1e;--card:#111827;--card2:#1a2540;
+  --border:rgba(255,255,255,0.07);
+  --text:#e2e8f0;--muted:#94a3b8;--dim:#475569;
+  --gold:#f5c842;--green:#22d3a0;--blue:#60a5fa;
+  --amber:#fb923c;--red:#f87171;
 }
+body{background:var(--bg);color:var(--text);font-family:Arial,sans-serif;min-height:100vh}
 
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
-
-body{
-    background:var(--bg);
-    color:var(--text);
-    font-family:Arial,sans-serif;
-    overflow-x:hidden;
-}
-
-/* ───────────────────────────── */
-/* HEADER */
-/* ───────────────────────────── */
-
+/* ── HEADER ── */
 header{
-    padding:24px 30px;
-    background:#111827;
-    border-bottom:1px solid var(--border);
+  background:#111827;border-bottom:1px solid var(--border);
+  padding:20px 32px;
+}
+.header-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+header h1{font-size:24px;font-weight:700;letter-spacing:-0.5px}
+header p{color:var(--muted);font-size:13px;margin-top:4px}
+.live-badge{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(34,211,160,0.08);border:1px solid rgba(34,211,160,0.25);
+  border-radius:20px;padding:8px 16px;margin-top:14px;width:fit-content;
+}
+.live-dot{width:8px;height:8px;background:var(--green);border-radius:50%;
+  box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.2)}}
+.live-badge span{font-size:13px;color:var(--green);font-weight:600}
+.live-badge small{color:var(--muted);font-size:12px}
+
+/* ── ERROR BANNER ── */
+.err-banner{
+  display:none;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);
+  color:var(--red);padding:10px 32px;font-size:13px;
 }
 
-header h1{
-    font-size:30px;
-    margin-bottom:8px;
+/* ── FILTERS ── */
+.filters{
+  padding:16px 32px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  border-bottom:1px solid var(--border);background:rgba(0,0,0,0.2);
 }
-
-header p{
-    color:var(--muted);
-    font-size:14px;
-}
-
-.last-updated-bar{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin-top:12px;
-    padding:10px 16px;
-    background:rgba(34,211,160,0.08);
-    border:1px solid rgba(34,211,160,0.25);
-    border-radius:8px;
-    width:fit-content;
-}
-.last-updated-bar .dot{
-    width:8px;height:8px;border-radius:50%;
-    background:#22d3a0;
-    box-shadow:0 0 6px #22d3a0;
-    animation:blink 2s infinite;
-}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.last-updated-bar span{
-    font-size:13px;color:#22d3a0;font-weight:600;
-}
-.last-updated-bar small{
-    font-size:12px;color:#94a3b8;margin-left:4px;
-}
-
-/* Leaflet dark popup */
-.dark-popup .leaflet-popup-content-wrapper{
-    background:#111827;border:1px solid #334155;border-radius:10px;padding:0;
-}
-.dark-popup .leaflet-popup-tip{ background:#111827; }
-.dark-popup .leaflet-popup-content{ margin:0; }
-.map-label .leaflet-tooltip-content{ background:transparent;border:none;box-shadow:none; }
-
-/* ───────────────────────────── */
-/* FILTERS */
-/* ───────────────────────────── */
-
-.topbar{
-    padding:20px 30px;
-    display:flex;
-    gap:12px;
-    flex-wrap:wrap;
-    border-bottom:1px solid var(--border);
-}
-
+.filter-lbl{font-size:11px;color:var(--dim);letter-spacing:2px;text-transform:uppercase}
 select{
-    background:#1e293b;
-    border:1px solid var(--border);
-    color:white;
-    padding:10px 14px;
-    border-radius:10px;
-    min-width:180px;
+  background:var(--card);border:1px solid var(--border);color:var(--text);
+  padding:8px 28px 8px 12px;border-radius:8px;font-size:12px;cursor:pointer;
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  transition:border-color .2s;
 }
-
-/* ───────────────────────────── */
-/* CONTAINER */
-/* ───────────────────────────── */
-
-.container{
-    padding:30px;
+select:hover{border-color:rgba(245,200,66,.4)}
+select:focus{outline:none;border-color:var(--gold)}
+.btn-reset{
+  margin-left:auto;padding:8px 16px;background:transparent;
+  border:1px solid var(--border);color:var(--muted);border-radius:8px;
+  font-size:12px;cursor:pointer;transition:all .2s;
 }
+.btn-reset:hover{border-color:var(--red);color:var(--red)}
 
-.dashboard-grid{
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:20px;
-}
+/* ── GRID ── */
+.main{padding:24px 32px 48px;display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
 
-/* ───────────────────────────── */
-/* KPI */
-/* ───────────────────────────── */
-
+/* ── KPI ── */
 .kpi{
-    background:var(--card);
-    border-radius:18px;
-    padding:24px;
-    border:1px solid var(--border);
-    transition:0.3s ease;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;padding:22px;position:relative;overflow:hidden;
+  transition:transform .2s,box-shadow .2s;
 }
+.kpi:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,.4)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:14px 14px 0 0}
+.kpi.gold::before{background:linear-gradient(90deg,var(--gold),transparent)}
+.kpi.green::before{background:linear-gradient(90deg,var(--green),transparent)}
+.kpi.blue::before{background:linear-gradient(90deg,var(--blue),transparent)}
+.kpi.amber::before{background:linear-gradient(90deg,var(--amber),transparent)}
+.kpi.red::before{background:linear-gradient(90deg,var(--red),transparent)}
+.kpi-lbl{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+.kpi-val{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1}
+.kpi.gold .kpi-val{color:var(--gold)}
+.kpi.green .kpi-val{color:var(--green)}
+.kpi.blue .kpi-val{color:var(--blue)}
+.kpi.amber .kpi-val{color:var(--amber)}
+.kpi.red .kpi-val{color:var(--red)}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:6px}
+.kpi-ico{position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:38px;opacity:.06}
 
-.kpi:hover{
-    transform:translateY(-4px);
-    box-shadow:0 10px 30px rgba(0,0,0,0.25);
+/* ── FOCUS CARD ── */
+.focus-card{
+  grid-column:span 2;
+  background:linear-gradient(135deg,rgba(245,200,66,.07),rgba(34,211,160,.04));
+  border:1px solid rgba(245,200,66,.22);border-radius:14px;padding:22px 24px;
+  position:relative;overflow:hidden;
 }
-
-.kpi-label{
-    color:var(--muted);
-    font-size:13px;
-    margin-bottom:12px;
-    text-transform:uppercase;
+.focus-card::after{content:'★';position:absolute;right:20px;top:16px;font-size:52px;color:var(--gold);opacity:.07}
+.focus-hd{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.focus-dot{width:8px;height:8px;background:var(--gold);border-radius:50%;
+  box-shadow:0 0 8px var(--gold);animation:pulse 2s infinite}
+.focus-ttl{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
+.focus-chips{display:flex;gap:10px;flex-wrap:wrap}
+.chip{
+  background:rgba(245,200,66,.09);border:1px solid rgba(245,200,66,.25);
+  border-radius:10px;padding:10px 14px;min-width:120px;
 }
+.chip-rank{font-size:9px;color:#c9a227;letter-spacing:1.5px;text-transform:uppercase}
+.chip-name{font-size:15px;font-weight:700;color:var(--gold);margin:2px 0}
+.chip-meta{font-size:10px;color:var(--muted)}
 
-.kpi-num{
-    font-size:38px;
-    font-weight:bold;
-}
-
-.kpi-sub{
-    margin-top:10px;
-    color:var(--muted);
-    font-size:13px;
-}
-
-/* ───────────────────────────── */
-/* CARDS */
-/* ───────────────────────────── */
-
+/* ── CHART CARD ── */
 .chart-card{
-    background:var(--card);
-    border-radius:18px;
-    padding:24px;
-    border:1px solid var(--border);
-    transition:0.3s ease;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;padding:20px;overflow:hidden;
 }
+.span2{grid-column:span 2}
+.span3{grid-column:span 3}
+.span4{grid-column:span 4}
+.card-ttl{font-size:13px;font-weight:700;margin-bottom:3px}
+.card-sub{font-size:10px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:16px}
+canvas{max-height:210px}
 
-.chart-card:hover{
-    transform:translateY(-5px);
-    box-shadow:0 10px 40px rgba(0,0,0,0.3);
+/* ── MAP ── */
+#map{height:400px;width:100%;border-radius:0 0 14px 14px}
+.leaflet-popup-content-wrapper{
+  background:#111827!important;border:1px solid #334155!important;
+  border-radius:10px!important;padding:0!important;color:var(--text)!important;
 }
+.leaflet-popup-tip{background:#111827!important}
+.leaflet-popup-content{margin:0!important}
 
-.chart-title{
-    font-size:22px;
-    font-weight:bold;
-}
-
-.chart-sub{
-    color:var(--muted);
-    margin-top:6px;
-    font-size:14px;
-}
-
-.span2{
-    grid-column:span 2;
-}
-
-.span4{
-    grid-column:span 4;
-}
-
-canvas{
-    margin-top:20px !important;
-}
-
-/* FIX: chart-small constrains doughnut canvas size */
-.chart-small{
-    height:260px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    position:relative;
-}
-
-/* ───────────────────────────── */
-/* TABLE */
-/* ───────────────────────────── */
-
-.table-wrap{
-    overflow:auto;
-    margin-top:20px;
-}
-
-table{
-    width:100%;
-    border-collapse:collapse;
-}
-
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:800px}
 th{
-    background:#1e293b;
-    padding:14px;
-    text-align:left;
-    color:var(--muted);
-    font-size:13px;
+  font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);
+  padding:12px 14px;text-align:left;background:rgba(0,0,0,.25);
+  border-bottom:1px solid var(--border);cursor:pointer;user-select:none;
 }
+th:hover{color:var(--muted)}
+td{padding:12px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.03)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;padding:2px 9px;border-radius:5px;font-size:10px;font-weight:600;white-space:nowrap}
+.b-int{background:rgba(34,211,160,.15);color:var(--green)}
+.b-neg{background:rgba(96,165,250,.15);color:var(--blue)}
+.b-rep{background:rgba(251,146,60,.15);color:var(--amber)}
+.b-rej{background:rgba(248,113,113,.15);color:var(--red)}
+.b-def{background:rgba(148,163,184,.1);color:var(--muted)}
+.sort-asc::after{content:' ↑';color:var(--gold)}
+.sort-desc::after{content:' ↓';color:var(--gold)}
 
-td{
-    padding:14px;
-    border-top:1px solid var(--border);
-    font-size:14px;
-}
-
-tr:hover{
-    background:rgba(255,255,255,0.03);
-}
-
-/* ───────────────────────────── */
-/* FOOTER */
-/* ───────────────────────────── */
-
-.footer{
-    padding:20px 30px;
-    color:var(--muted);
-    font-size:13px;
-}
-
-/* ───────────────────────────── */
-/* ERROR BANNER */
-/* ───────────────────────────── */
-
-.error-banner{
-    background:#7f1d1d;
-    color:#fca5a5;
-    padding:14px 24px;
-    font-size:14px;
-    border-bottom:1px solid #991b1b;
-    display:none;
-}
-
-/* ───────────────────────────── */
-/* AI SIDEBAR */
-/* ───────────────────────────── */
-
-.ai-sidebar{
-    position:fixed;
-    top:0;
-    right:0;
-    width:420px;
-    height:100vh;
-    background:linear-gradient(180deg,#111827,#0f172a);
-    border-left:1px solid rgba(255,255,255,0.08);
-    z-index:9999;
-    transform:translateX(100%);
-    transition:0.4s ease;
-    display:flex;
-    flex-direction:column;
-    box-shadow:-10px 0 40px rgba(0,0,0,0.4);
-}
-
-.ai-sidebar.open{
-    transform:translateX(0);
-}
-
-.toggle-btn{
-    position:fixed;
-    top:20px;
-    right:20px;
-    z-index:10000;
-    background:linear-gradient(90deg,#2563eb,#7c3aed);
-    color:white;
-    border:none;
-    padding:14px 22px;
-    border-radius:14px;
-    font-weight:bold;
-    cursor:pointer;
-    box-shadow:0 10px 30px rgba(37,99,235,0.3);
-}
-
-.close-btn{
-    background:none;
-    border:none;
-    color:white;
-    font-size:20px;
-    cursor:pointer;
-}
-
-.ai-sidebar-header{
-    padding:24px;
-    border-bottom:1px solid rgba(255,255,255,0.06);
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-}
-
-.sidebar-sub{
-    color:#94a3b8;
-    margin-top:5px;
-    font-size:13px;
-}
-
-.ai-sidebar-content{
-    flex:1;
-    overflow:auto;
-    padding:22px;
-}
-
-.ai-highlight-grid{
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:14px;
-    margin-bottom:24px;
-}
-
-.highlight-card{
-    background:rgba(255,255,255,0.04);
-    border:1px solid rgba(255,255,255,0.05);
-    border-radius:16px;
-    padding:18px;
-    transition:0.3s;
-}
-
-.highlight-card:hover{
-    transform:translateY(-4px);
-    background:rgba(255,255,255,0.06);
-}
-
-.highlight-label{
-    color:#94a3b8;
-    font-size:11px;
-    margin-bottom:10px;
-}
-
-.highlight-value{
-    font-size:24px;
-    font-weight:bold;
-}
-
-.ai-scroll{
-    white-space:pre-wrap;
-    line-height:1.9;
-    color:#e2e8f0;
-    font-size:15px;
-}
-
-/* ───────────────────────────── */
-/* MOBILE */
-/* ───────────────────────────── */
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
 
 @media(max-width:1100px){
-    .dashboard-grid{
-        grid-template-columns:repeat(2,1fr);
-    }
-    .span2,.span4{
-        grid-column:span 2;
-    }
+  .main{grid-template-columns:repeat(2,1fr)}
+  .span3,.span4{grid-column:span 2}
 }
-
-@media(max-width:700px){
-    .dashboard-grid{
-        grid-template-columns:1fr;
-    }
-    .span2,.span4{
-        grid-column:span 1;
-    }
-    .topbar{
-        flex-direction:column;
-    }
-    select{
-        width:100%;
-    }
-    .ai-sidebar{
-        width:100%;
-    }
-    .ai-highlight-grid{
-        grid-template-columns:1fr;
-    }
+@media(max-width:680px){
+  .main{grid-template-columns:1fr;padding:16px}
+  header,filters{padding:16px}
+  .focus-card,.span2,.span3,.span4{grid-column:span 1}
 }
-
 </style>
-
 </head>
-
 <body>
 
-<!-- ERROR BANNER (shown on API failure) -->
-<div id="errorBanner" class="error-banner"></div>
-
+<!-- HEADER -->
 <header>
-    <h1>ALIMCO AI Export Intelligence Dashboard</h1>
-    <p>Live Export Analytics · Market Intelligence · Global Expansion Strategy</p>
-    <div class="last-updated-bar">
-        <div class="dot"></div>
-        <span>Last Updated:</span>
-        <span id="fileMtime">—</span>
-        <small>· File: <span id="fileName">—</span></small>
+  <div class="header-top">
+    <div>
+      <h1>ALIMCO Export Intelligence Dashboard</h1>
+      <p>Ministry of Social Justice &amp; Empowerment · Live Export Analytics</p>
     </div>
+    <button onclick="loadData()" style="background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);color:var(--gold);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">⟳ Refresh</button>
+  </div>
+  <div class="live-badge">
+    <div class="live-dot"></div>
+    <span>Last Updated:</span>
+    <span id="mtime" style="color:white;font-weight:400">—</span>
+    <small id="fname">·  loading…</small>
+  </div>
 </header>
 
-<div class="topbar">
-    <select id="fCountry"><option value="">All Countries</option></select>
-    <select id="fStatus"><option value="">All Status</option></select>
-    <select id="fStage"><option value="">All Stages</option></select>
-    <select id="fType"><option value="">All Types</option></select>
-    <select id="fSource"><option value="">All Sources</option></select>
+<div class="err-banner" id="err"></div>
+
+<!-- FILTERS -->
+<div class="filters">
+  <span class="filter-lbl">Filter</span>
+  <select id="fC"><option value="">All Countries</option></select>
+  <select id="fS"><option value="">All Statuses</option></select>
+  <select id="fG"><option value="">All Deal Stages</option></select>
+  <select id="fT"><option value="">All Order Types</option></select>
+  <select id="fSr"><option value="">All Sources</option></select>
+  <button class="btn-reset" onclick="resetF()">✕ Reset</button>
 </div>
 
-<div class="container">
-    <div id="dashboard" class="dashboard-grid"></div>
-</div>
-
-<!-- FIX 1: AI sidebar HTML + toggle button were completely missing from the original -->
-<button class="toggle-btn"
-        onclick="document.querySelector('.ai-sidebar').classList.toggle('open')">
-    🤖 AI Insights
-</button>
-
-<div class="ai-sidebar">
-    <div class="ai-sidebar-header">
-        <div>
-            <div style="font-size:18px;font-weight:bold;">AI Insights</div>
-            <div class="sidebar-sub">Powered by export intelligence</div>
-        </div>
-        <button class="close-btn"
-                onclick="document.querySelector('.ai-sidebar').classList.remove('open')">✕</button>
-    </div>
-    <div class="ai-sidebar-content">
-        <div class="ai-highlight-grid">
-            <div class="highlight-card">
-                <div class="highlight-label">TOP MARKET</div>
-                <div class="highlight-value" id="topMarket">—</div>
-            </div>
-            <div class="highlight-card">
-                <div class="highlight-label">CONVERSION</div>
-                <div class="highlight-value" id="convRate">—</div>
-            </div>
-        </div>
-        <!-- FIX 2: #aiInsights element was referenced in JS but never present in the HTML -->
-        <div class="ai-scroll" id="aiInsights">Loading insights…</div>
-    </div>
-</div>
+<!-- DASHBOARD -->
+<div class="main" id="main"></div>
 
 <script>
+const API = '/api/leads';
+let ALL=[], FD=[], MAP=null;
+let SK='sno', SD=1;
+const CI={};
 
-const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ? 'http://localhost:5000/api/leads'
-    : '/api/leads';
-
-// FIX 3: demo fallback data — charts now render even when the backend is offline
-const DEMO_DATA = [
-    {company:'MediCare Egypt',   country:'Egypt',       status:'Interested',  stage:'Proposal',   type:'Distributor', source:'Trade Fair', value_inr:1200000},
-    {company:'Gulf Mobility',    country:'UAE',         status:'Negotiating', stage:'Demo Done',  type:'Direct',      source:'Embassy',    value_inr:3500000},
-    {company:'Kenya Rehab Ltd',  country:'Kenya',       status:'Interested',  stage:'Initial',    type:'NGO',         source:'Website',    value_inr:900000},
-    {company:'BanglaAid',        country:'Bangladesh',  status:'Hot Lead',    stage:'Proposal',   type:'Govt',        source:'Referral',   value_inr:2100000},
-    {company:'NepaCare',         country:'Nepal',       status:'Cold',        stage:'Initial',    type:'Distributor', source:'Trade Fair', value_inr:450000},
-    {company:'SriMed',           country:'Sri Lanka',   status:'Interested',  stage:'Demo Done',  type:'Direct',      source:'Website',    value_inr:1750000},
-    {company:'Thai Wellness',    country:'Thailand',    status:'Negotiating', stage:'Proposal',   type:'Distributor', source:'Embassy',    value_inr:2800000},
-    {company:'PhilHealth Sup',   country:'Philippines', status:'Hot Lead',    stage:'MOU Signed', type:'Govt',        source:'Referral',   value_inr:4200000},
-    {company:'IranMed Co',       country:'Iran',        status:'Cold',        stage:'Initial',    type:'Direct',      source:'Trade Fair', value_inr:600000},
-    {company:'EthioRehab',       country:'Ethiopia',    status:'Interested',  stage:'Demo Done',  type:'NGO',         source:'Website',    value_inr:1050000},
-    {company:'TanzaCare',        country:'Tanzania',    status:'Negotiating', stage:'Proposal',   type:'Distributor', source:'Embassy',    value_inr:1900000},
-    {company:'VinaHealth',       country:'Vietnam',     status:'Hot Lead',    stage:'MOU Signed', type:'Govt',        source:'Referral',   value_inr:3300000},
-];
-
-let allData      = [];
-let filteredData = [];
-window.aiInsights = '';
-
-const chartInstances = {};
-
-window.addEventListener('load', () => {
-    loadData();
-    ['fCountry','fStatus','fStage','fType','fSource'].forEach(id =>
-        document.getElementById(id).addEventListener('change', applyFilters)
-    );
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  loadData();
+  ['fC','fS','fG','fT','fSr'].forEach(id=>document.getElementById(id).addEventListener('change',applyF));
+  setInterval(loadData, 30000);
 });
 
+// ── Load ──────────────────────────────────────────────────────────────────────
 async function loadData(){
-    try {
-        const response = await fetch(API + '?t=' + Date.now());
-        if(!response.ok) throw new Error(`Server returned ${response.status} ${response.statusText}`);
-        const json = await response.json();
-        allData      = json.leads || [];
-        filteredData = [...allData];
-        window.aiInsights = json.ai_insights || 'No AI insights available.';
-        document.getElementById('fileName') .textContent = json.meta?.file          || '—';
-        document.getElementById('fileMtime').textContent = json.meta?.last_modified || '—';
-    } catch(err) {
-        const banner = document.getElementById('errorBanner');
-        banner.textContent   = `⚠ Backend unreachable (${err.message}). Showing demo data.`;
-        banner.style.display = 'block';
-        allData      = DEMO_DATA;
-        filteredData = [...allData];
-        window.aiInsights =
-            'Demo mode — connect the backend at localhost:5000 for live data.\n\n' +
-            '• Top opportunity: Philippines (₹42 L pipeline)\n' +
-            '• 4 leads in active negotiation or MOU stage\n' +
-            '• Trade Fair remains the highest-volume lead source\n' +
-            '• South-East Asia cluster shows strongest engagement\n' +
-            '• Prioritise UAE and Thailand for Q3 closures';
-        document.getElementById('fileName') .textContent = 'demo-data';
-        document.getElementById('fileMtime').textContent = new Date().toLocaleString();
-        console.warn('loadData fell back to demo data:', err);
+  try{
+    const r = await fetch(API+'?t='+Date.now());
+    if(!r.ok) throw new Error(r.statusText);
+    const j = await r.json();
+    ALL = j.leads||[];
+    document.getElementById('mtime').textContent = j.meta?.last_modified||'—';
+    document.getElementById('fname').textContent  = '· '+( j.meta?.file||'—');
+    if(j.meta?.source==='fallback'){
+      const e=document.getElementById('err');
+      e.style.display='block';
+      e.textContent='⚠ Showing embedded data. Upload your Excel at /upload to see live data.';
     }
-    populateFilters();
-    renderDashboard();
+  }catch(e){
+    document.getElementById('err').style.display='block';
+    document.getElementById('err').textContent='⚠ API error: '+e.message;
+    if(!ALL.length) ALL=[];
+  }
+  populateF();
+  applyF();
 }
 
-function populateFilters(){
-    const sets = { country:new Set(), status:new Set(), stage:new Set(), type:new Set(), source:new Set() };
-    allData.forEach(r => {
-        if(r.country) sets.country.add(r.country);
-        if(r.status)  sets.status .add(r.status);
-        if(r.stage)   sets.stage  .add(r.stage);
-        if(r.type)    sets.type   .add(r.type);
-        if(r.source)  sets.source .add(r.source);
+// ── Filters ───────────────────────────────────────────────────────────────────
+function populateF(){
+  const s={fC:new Set(),fS:new Set(),fG:new Set(),fT:new Set(),fSr:new Set()};
+  ALL.forEach(r=>{
+    if(r.country) s.fC.add(r.country);
+    if(r.status)  s.fS.add(r.status);
+    if(r.stage)   s.fG.add(r.stage);
+    if(r.type)    s.fT.add(r.type);
+    if(r.source)  s.fSr.add(r.source);
+  });
+  [['fC','Countries'],['fS','Statuses'],['fG','Deal Stages'],['fT','Order Types'],['fSr','Sources']].forEach(([id,lbl])=>{
+    const el=document.getElementById(id), cur=el.value;
+    el.innerHTML=`<option value="">All ${lbl}</option>`;
+    [...s[id]].sort().forEach(v=>{
+      const o=document.createElement('option');
+      o.value=v;o.textContent=v;if(v===cur)o.selected=true;
+      el.appendChild(o);
     });
-    fillSelect('fCountry', sets.country);
-    fillSelect('fStatus',  sets.status);
-    fillSelect('fStage',   sets.stage);
-    fillSelect('fType',    sets.type);
-    fillSelect('fSource',  sets.source);
+  });
+}
+function applyF(){
+  const f={c:document.getElementById('fC').value,s:document.getElementById('fS').value,
+           g:document.getElementById('fG').value,t:document.getElementById('fT').value,
+           sr:document.getElementById('fSr').value};
+  FD=ALL.filter(r=>(!f.c||r.country===f.c)&&(!f.s||r.status===f.s)&&
+                    (!f.g||r.stage===f.g)&&(!f.t||r.type===f.t)&&(!f.sr||r.source===f.sr));
+  render();
+}
+function resetF(){
+  ['fC','fS','fG','fT','fSr'].forEach(id=>document.getElementById(id).value='');
+  FD=[...ALL]; render();
 }
 
-function fillSelect(id, set){
-    const el = document.getElementById(id);
-    const first = el.options[0].text;
-    el.innerHTML = `<option value="">${first}</option>`;
-    [...set].sort().forEach(v => {
-        const o = document.createElement('option');
-        o.value = o.textContent = v;
-        el.appendChild(o);
-    });
+// ── Focus score ───────────────────────────────────────────────────────────────
+function focusScore(leads){
+  const w={Negotiating:40,Interested:30,'Reply to be Given':20,'Not Interested':-10,'Closed - Lost':-20};
+  let s=leads.length*5, v=0;
+  leads.forEach(l=>{s+=w[l.status]||0;v+=l.value_inr||0;});
+  if(v>0) s+=Math.log10(v)*4;
+  return Math.round(s);
 }
 
-function applyFilters(){
-    const f = {
-        country: document.getElementById('fCountry').value,
-        status:  document.getElementById('fStatus') .value,
-        stage:   document.getElementById('fStage')  .value,
-        type:    document.getElementById('fType')   .value,
-        source:  document.getElementById('fSource') .value,
-    };
-    filteredData = allData.filter(r =>
-        (!f.country || r.country === f.country) &&
-        (!f.status  || r.status  === f.status)  &&
-        (!f.stage   || r.stage   === f.stage)   &&
-        (!f.type    || r.type    === f.type)     &&
-        (!f.source  || r.source  === f.source)
-    );
-    renderDashboard();
+// ── Format ────────────────────────────────────────────────────────────────────
+function fmtINR(n){
+  if(!n||n===0) return '—';
+  if(n>=1e7) return '₹'+(n/1e7).toFixed(2)+' Cr';
+  if(n>=1e5) return '₹'+(n/1e5).toFixed(2)+' L';
+  return '₹'+n.toLocaleString('en-IN');
+}
+function badgeCls(s){
+  if(!s) return 'b-def';
+  const l=s.toLowerCase();
+  if(l.includes('negotiat'))  return 'b-neg';
+  if(l.includes('interest'))  return 'b-int';
+  if(l.includes('reply'))     return 'b-rep';
+  if(l.includes('not')||l.includes('lost')||l.includes('cold')) return 'b-rej';
+  return 'b-def';
 }
 
-function destroyChart(id){
-    if(chartInstances[id]){ chartInstances[id].destroy(); delete chartInstances[id]; }
+// ── Main render ───────────────────────────────────────────────────────────────
+function render(){
+  Object.values(CI).forEach(c=>c&&c.destroy());
+  for(const k in CI) delete CI[k];
+  if(MAP){MAP.remove();MAP=null;}
+
+  const total    = FD.length;
+  const orders   = FD.reduce((s,r)=>s+(r.value_inr||0),0);
+  const warm     = FD.filter(r=>['Interested','Negotiating'].includes(r.status)).length;
+  const pending  = FD.filter(r=>r.status==='Reply to be Given').length;
+  const rejected = FD.filter(r=>['Not Interested','Closed - Lost','Cold'].includes(r.status)).length;
+  const ctrs     = new Set(FD.map(r=>r.country)).size;
+
+  // Focus countries
+  const byC={};
+  FD.forEach(r=>{if(r.country&&r.country!=='—'){(byC[r.country]=byC[r.country]||[]).push(r);}});
+  const scored=Object.entries(byC)
+    .map(([c,ls])=>({c,score:focusScore(ls),n:ls.length}))
+    .sort((a,b)=>b.score-a.score).slice(0,4);
+
+  // Sort for table
+  const sorted=[...FD].sort((a,b)=>{
+    let va=a[SK]??'', vb=b[SK]??'';
+    if(typeof va==='string'){va=va.toLowerCase();vb=vb.toLowerCase();}
+    return (va<vb?-1:va>vb?1:0)*SD;
+  });
+
+  document.getElementById('main').innerHTML=`
+    <!-- KPIs -->
+    <div class="kpi gold"><div class="kpi-lbl">Total Leads</div><div class="kpi-val" id="kN">0</div><div class="kpi-sub">${ctrs} countries</div><div class="kpi-ico">🌍</div></div>
+    <div class="kpi green"><div class="kpi-lbl">Orders Received Value</div><div class="kpi-val">${fmtINR(orders)}</div><div class="kpi-sub">$${((FD.reduce((s,r)=>s+(r.value_usd||0),0))/1000).toFixed(1)}K USD</div><div class="kpi-ico">₹</div></div>
+    <div class="kpi blue"><div class="kpi-lbl">Warm Leads</div><div class="kpi-val" id="kW">0</div><div class="kpi-sub">Interested + Negotiating</div><div class="kpi-ico">🤝</div></div>
+    <div class="kpi amber"><div class="kpi-lbl">Reply Pending</div><div class="kpi-val" id="kP">0</div><div class="kpi-sub">Action required</div><div class="kpi-ico">⏳</div></div>
+    <div class="kpi red"><div class="kpi-lbl">Leads Rejected</div><div class="kpi-val" id="kR">0</div><div class="kpi-sub">Not Interested / Lost</div><div class="kpi-ico">✕</div></div>
+
+    <!-- Focus -->
+    <div class="focus-card">
+      <div class="focus-hd"><div class="focus-dot"></div><div class="focus-ttl">Priority Focus Countries</div></div>
+      <div class="focus-chips">${scored.map((s,i)=>`
+        <div class="chip">
+          <div class="chip-rank">#${i+1} priority</div>
+          <div class="chip-name">${s.c}</div>
+          <div class="chip-meta">${s.n} lead${s.n>1?'s':''} · Score ${s.score}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="chart-card span3">
+      <div class="card-ttl">Orders Received by Country (₹)</div>
+      <div class="card-sub">value ranking</div>
+      <canvas id="cBar"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="card-ttl">Lead Status</div>
+      <div class="card-sub">distribution</div>
+      <canvas id="cDon"></canvas>
+    </div>
+    <div class="chart-card span2">
+      <div class="card-ttl">Lead Sources</div>
+      <div class="card-sub">origin mix</div>
+      <canvas id="cSrc"></canvas>
+    </div>
+    <div class="chart-card span2">
+      <div class="card-ttl">Deal Stage Pipeline</div>
+      <div class="card-sub">progression</div>
+      <canvas id="cStg"></canvas>
+    </div>
+
+    <!-- Map -->
+    <div class="chart-card span4" style="padding:0;overflow:hidden">
+      <div style="padding:16px 20px 10px"><div class="card-ttl">Export Leads Map</div><div class="card-sub">click pins to see lead details</div></div>
+      <div id="map"></div>
+    </div>
+
+    <!-- Table -->
+    <div class="chart-card span4" style="padding:0;overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div><div class="card-ttl">All Export Leads</div><div class="card-sub" style="margin:0">Showing <span style="color:var(--gold)">${sorted.length}</span> leads</div></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th onclick="sortT('sno')" id="th-sno">#</th>
+            <th onclick="sortT('company')" id="th-company">Company</th>
+            <th onclick="sortT('country')" id="th-country">Country</th>
+            <th onclick="sortT('status')" id="th-status">Status</th>
+            <th onclick="sortT('stage')" id="th-stage">Stage</th>
+            <th onclick="sortT('value_inr')" id="th-value_inr">Value (₹)</th>
+            <th>Contact</th>
+            <th>Source</th>
+            <th>Notes</th>
+          </tr></thead>
+          <tbody>${sorted.map(r=>`
+            <tr>
+              <td style="color:var(--dim);font-size:11px">${r.sno}</td>
+              <td style="font-weight:600">${r.company}</td>
+              <td style="color:var(--blue);font-size:12px">${r.country}</td>
+              <td><span class="badge ${badgeCls(r.status)}">${r.status||'—'}</span></td>
+              <td style="color:var(--muted);font-size:12px">${r.stage||'—'}</td>
+              <td style="color:var(--green);font-size:12px">${fmtINR(r.value_inr)}</td>
+              <td style="color:var(--muted);font-size:12px">${r.contact||'—'}</td>
+              <td style="color:var(--dim);font-size:11px">${r.source||'—'}</td>
+              <td style="color:var(--dim);font-size:12px;font-style:italic;max-width:160px;overflow:hidden;text-overflow:ellipsis">${r.notes||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Animate KPIs
+  animN('kN',total); animN('kW',warm); animN('kP',pending); animN('kR',rejected);
+
+  // Charts
+  const pal=['#f5c842','#22d3a0','#60a5fa','#fb923c','#f87171','#a78bfa','#34d399','#e879f9'];
+  const cOpts={responsive:true,maintainAspectRatio:true,
+    plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}},
+             tooltip:{backgroundColor:'#111827',titleColor:'white',bodyColor:'#94a3b8',borderColor:'#334155',borderWidth:1}},
+    scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+            y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}}}};
+  const dOpts={responsive:true,maintainAspectRatio:true,
+    plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},padding:12,boxWidth:10}},
+             tooltip:{backgroundColor:'#111827',titleColor:'white',bodyColor:'#94a3b8'}},
+    cutout:'65%'};
+
+  // Bar chart
+  const bv={};FD.forEach(r=>{if(r.country&&r.country!=='—')bv[r.country]=(bv[r.country]||0)+(r.value_inr||0);});
+  const bsorted=Object.entries(bv).sort((a,b)=>b[1]-a[1]);
+  CI.bar=new Chart(document.getElementById('cBar').getContext('2d'),{
+    type:'bar',
+    data:{labels:bsorted.map(x=>x[0]),datasets:[{
+      data:bsorted.map(x=>x[1]),
+      backgroundColor:bsorted.map((_,i)=>i===0?'rgba(245,200,66,.85)':i===1?'rgba(34,211,160,.75)':i===2?'rgba(96,165,250,.7)':'rgba(148,163,184,.35)'),
+      borderRadius:6,borderWidth:0}]},
+    options:{...cOpts,plugins:{...cOpts.plugins,legend:{display:false}},
+      scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+              y:{ticks:{color:'#94a3b8',callback:v=>v>=1e7?(v/1e7).toFixed(1)+'Cr':v>=1e5?(v/1e5).toFixed(1)+'L':v},grid:{color:'rgba(255,255,255,.04)'}}}}
+  });
+
+  // Donut
+  const sc={};FD.forEach(r=>{if(r.status)sc[r.status]=(sc[r.status]||0)+1;});
+  const sCols={Interested:'#22d3a0',Negotiating:'#60a5fa','Reply to be Given':'#fb923c','Not Interested':'#f87171','Closed - Lost':'#475569'};
+  const sK=Object.keys(sc);
+  CI.don=new Chart(document.getElementById('cDon').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:sK,datasets:[{data:sK.map(k=>sc[k]),backgroundColor:sK.map(k=>sCols[k]||'#94a3b8'),borderColor:'#111827',borderWidth:3}]},
+    options:dOpts
+  });
+
+  // Source pie
+  const src={};FD.forEach(r=>{if(r.source)src[r.source]=(src[r.source]||0)+1;});
+  const srK=Object.keys(src);
+  CI.src=new Chart(document.getElementById('cSrc').getContext('2d'),{
+    type:'pie',
+    data:{labels:srK,datasets:[{data:srK.map(k=>src[k]),backgroundColor:pal.slice(0,srK.length),borderColor:'#111827',borderWidth:3}]},
+    options:{...dOpts,plugins:{...dOpts.plugins,legend:{...dOpts.plugins.legend,position:'bottom'}}}
+  });
+
+  // Stage bar
+  const stg={};FD.forEach(r=>{if(r.stage)stg[r.stage]=(stg[r.stage]||0)+1;});
+  const stgK=Object.keys(stg);
+  CI.stg=new Chart(document.getElementById('cStg').getContext('2d'),{
+    type:'bar',
+    data:{labels:stgK,datasets:[{label:'Leads',data:stgK.map(k=>stg[k]),backgroundColor:pal.slice(0,stgK.length),borderRadius:6,borderWidth:0}]},
+    options:{...cOpts,indexAxis:'y',plugins:{...cOpts.plugins,legend:{display:false}}}
+  });
+
+  // Map
+  buildMap();
 }
 
-function renderDashboard(){
+// ── Map ───────────────────────────────────────────────────────────────────────
+function buildMap(){
+  MAP=L.map('map',{zoomControl:true}).setView([20,30],2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© OSM © CARTO',subdomains:'abcd',maxZoom:19
+  }).addTo(MAP);
 
-    ['countryChart','statusChart','ordersChart','sourceChart'].forEach(destroyChart);
+  const scol=s=>{
+    if(!s) return '#94a3b8';
+    const l=s.toLowerCase();
+    if(l.includes('negotiat'))  return '#60a5fa';
+    if(l.includes('interest'))  return '#22d3a0';
+    if(l.includes('reply'))     return '#fb923c';
+    if(l.includes('not')||l.includes('lost')||l.includes('cold')) return '#f87171';
+    return '#a78bfa';
+  };
 
-    const totalOrders   = filteredData.reduce((a,b) => a+(b.value_inr||0), 0);
-    const countries     = new Set(filteredData.map(x=>x.country)).size;
-    const interested    = filteredData.filter(x=>x.status==='Interested').length;
-    const rejected      = filteredData.filter(x=>['Not Interested','Closed - Lost','Cold'].includes(x.status)).length;
-
-    document.getElementById('dashboard').innerHTML = `
-
-        <div class="kpi">
-            <div class="kpi-label">Total Leads</div>
-            <div class="kpi-num">${filteredData.length}</div>
-        </div>
-
-        <div class="kpi">
-            <div class="kpi-label">Countries</div>
-            <div class="kpi-num">${countries}</div>
-        </div>
-
-        <div class="kpi" style="border-top:2px solid #22d3a0">
-            <div class="kpi-label">Orders Received Value</div>
-            <div class="kpi-num" style="color:#22d3a0">₹${Math.round(totalOrders).toLocaleString()}</div>
-        </div>
-
-        <div class="kpi">
-            <div class="kpi-label">Interested Leads</div>
-            <div class="kpi-num">${interested}</div>
-        </div>
-
-        <div class="kpi" style="border-top:2px solid #f87171">
-            <div class="kpi-label">Leads Rejected</div>
-            <div class="kpi-num" style="color:#f87171">${rejected}</div>
-        </div>
-
-        <div class="chart-card span2">
-            <div class="chart-title">Country Export Value</div>
-            <canvas id="countryChart"></canvas>
-        </div>
-
-        <div class="chart-card span2">
-            <div class="chart-title">Lead Status</div>
-            <div class="chart-small">
-                <canvas id="statusChart"></canvas>
-            </div>
-        </div>
-
-        <div class="chart-card span2">
-            <div class="chart-title">Orders Received by Country</div>
-            <canvas id="ordersChart"></canvas>
-        </div>
-
-        <div class="chart-card span2">
-            <div class="chart-title">Lead Sources</div>
-            <div class="chart-small">
-                <canvas id="sourceChart"></canvas>
-            </div>
-        </div>
-
-        <div class="chart-card span4" style="padding:0;overflow:hidden">
-            <div class="chart-title" style="padding:16px 20px 8px">Export Leads Map</div>
-            <div id="leadsMap" style="height:420px;width:100%"></div>
-        </div>
-
-        <div class="chart-card span4">
-            <div class="chart-title">Export Leads</div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Company</th><th>Country</th><th>Status</th><th>Stage</th><th>Value</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${filteredData.map(lead => `
-                            <tr>
-                                <td>${lead.company||'-'}</td>
-                                <td>${lead.country||'-'}</td>
-                                <td>${lead.status ||'-'}</td>
-                                <td>${lead.stage  ||'-'}</td>
-                                <td>₹${Math.round(lead.value_inr||0).toLocaleString()}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-
-    // FIX 2 applied: #aiInsights now exists in the sidebar above — no more crash
-    document.getElementById('aiInsights').innerText = window.aiInsights;
-
-    // Sidebar highlight cards
-    const totalsMap = {};
-    filteredData.forEach(r => { const c=r.country||'?'; totalsMap[c]=(totalsMap[c]||0)+(r.value_inr||0); });
-    const topCountry = Object.entries(totalsMap).sort((a,b)=>b[1]-a[1])[0]?.[0] || '—';
-    const conversion = filteredData.length
-        ? Math.round(filteredData.filter(x=>['Hot Lead','Negotiating','MOU Signed'].includes(x.status)).length / filteredData.length * 100) + '%'
-        : '—';
-    document.getElementById('topMarket').textContent = topCountry;
-    document.getElementById('convRate') .textContent = conversion;
-
-    renderCountryChart();
-    renderStatusChart();
-    renderOrdersChart();
-    renderSourceChart();
-    renderMap();
-}
-
-// Chart colour palette
-const PALETTE = ['#2563eb','#7c3aed','#0891b2','#059669','#d97706','#dc2626','#db2777','#65a30d','#9333ea','#0284c7','#16a34a','#ea580c'];
-const palette = n => Array.from({length:n},(_,i)=>PALETTE[i%PALETTE.length]);
-
-// Shared options — bar / line
-const chartOptions = {
-    responsive: true,
-    interaction:{ intersect:false, mode:'index' },
-    animation:  { duration:1500 },
-    plugins:{
-        legend:  { labels:{ color:'white' } },
-        tooltip: { enabled:true, backgroundColor:'#111827', titleColor:'white', bodyColor:'white', borderColor:'#2563eb', borderWidth:1 }
-    },
-    scales:{
-        x:{ ticks:{ color:'white' }, grid:{ color:'rgba(255,255,255,0.05)' } },
-        y:{ ticks:{ color:'white' }, grid:{ color:'rgba(255,255,255,0.05)' } }
+  const byC={};
+  FD.forEach(r=>{
+    if(r.lat&&r.lng){
+      const k=r.country;
+      (byC[k]=byC[k]||{lat:r.lat,lng:r.lng,leads:[]}).leads.push(r);
     }
-};
+  });
 
-// Shared options — doughnut (no scales axis)
-const doughnutOptions = {
-    responsive:true, maintainAspectRatio:false,
-    animation:{ duration:1500 },
-    plugins:{
-        legend:  { labels:{ color:'white' } },
-        tooltip: { enabled:true, backgroundColor:'#111827', titleColor:'white', bodyColor:'white', borderColor:'#2563eb', borderWidth:1 }
-    }
-};
+  Object.values(byC).forEach(({lat,lng,leads})=>{
+    const best=leads.sort((a,b)=>(b.value_inr||0)-(a.value_inr||0))[0];
+    const total=leads.reduce((s,l)=>s+(l.value_inr||0),0);
+    const col=scol(best.status);
+    const r=Math.max(8,Math.min(22,8+Math.log10((total||1)+1)*3));
 
-function sumBy(key, valKey){
-    const t={};
-    filteredData.forEach(r=>{ const v=r[key]||'Unknown'; t[v]=(t[v]||0)+(r[valKey]||0); });
-    return t;
-}
-function countBy(key){
-    const t={};
-    filteredData.forEach(r=>{ const v=r[key]||'Unknown'; t[v]=(t[v]||0)+1; });
-    return t;
-}
+    L.circleMarker([lat,lng],{radius:r,color:col,fillColor:col,fillOpacity:.85,weight:2})
+     .addTo(MAP)
+     .bindPopup(`
+       <div style="font-family:Arial;min-width:260px">
+         <div style="background:#1e293b;padding:10px 14px;border-bottom:1px solid #334155">
+           <strong style="color:white;font-size:14px">📍 ${best.country}</strong>
+           <span style="float:right;color:#94a3b8;font-size:12px">${leads.length} lead${leads.length>1?'s':''}</span>
+         </div>
+         ${leads.map(l=>`
+           <div style="padding:8px 14px;border-bottom:1px solid #1e293b">
+             <div style="font-weight:600;color:white;font-size:13px">${l.company}</div>
+             <div style="margin-top:4px;display:flex;gap:8px;align-items:center">
+               <span style="background:${scol(l.status)}22;color:${scol(l.status)};padding:1px 7px;border-radius:4px;font-size:11px">${l.status||'—'}</span>
+               <span style="color:#22d3a0;font-size:12px">${fmtINR(l.value_inr)}</span>
+             </div>
+           </div>`).join('')}
+         ${total>0?`<div style="padding:8px 14px;color:#22d3a0;font-size:12px;text-align:right">Total: ${fmtINR(total)}</div>`:''}
+       </div>`,{maxWidth:320,className:'lf-popup'});
+  });
 
-function renderCountryChart(){
-    const t = sumBy('country','value_inr');
-    chartInstances['countryChart'] = new Chart(document.getElementById('countryChart'),{
-        type:'bar',
-        data:{ labels:Object.keys(t), datasets:[{ label:'Export Value (₹)', data:Object.values(t), backgroundColor:palette(Object.keys(t).length), borderRadius:6, borderWidth:0 }] },
-        options:chartOptions
-    });
-}
-
-function renderStatusChart(){
-    const t = countBy('status');
-    chartInstances['statusChart'] = new Chart(document.getElementById('statusChart'),{
-        type:'doughnut',
-        data:{ labels:Object.keys(t), datasets:[{ data:Object.values(t), backgroundColor:palette(Object.keys(t).length), cutout:'70%' }] },
-        options:{ ...doughnutOptions, radius:'60%' }
-    });
-}
-
-function renderSourceChart(){
-    const t = countBy('source');
-    chartInstances['sourceChart'] = new Chart(document.getElementById('sourceChart'),{
-        type:'doughnut',
-        data:{ labels:Object.keys(t), datasets:[{ data:Object.values(t), backgroundColor:palette(Object.keys(t).length), cutout:'70%' }] },
-        options:{ ...doughnutOptions, radius:'70%' }
-    });
+  // Legend
+  const legend=L.control({position:'bottomright'});
+  legend.onAdd=()=>{
+    const d=L.DomUtil.create('div');
+    d.style.cssText='background:#111827;border:1px solid #334155;border-radius:8px;padding:10px 14px;font-family:Arial;font-size:12px';
+    d.innerHTML=[['#22d3a0','Interested'],['#60a5fa','Negotiating'],['#fb923c','Reply Pending'],['#f87171','Rejected']]
+      .map(([c,l])=>`<div style="display:flex;align-items:center;gap:6px;margin:3px 0;color:#e2e8f0"><div style="width:10px;height:10px;border-radius:50%;background:${c}"></div>${l}</div>`)
+      .join('');
+    return d;
+  };
+  legend.addTo(MAP);
 }
 
-function renderOrdersChart(){
-    const t = sumBy('country','value_inr');
-    chartInstances['ordersChart'] = new Chart(document.getElementById('ordersChart'),{
-        type:'line',
-        data:{ labels:Object.keys(t), datasets:[{ label:'Orders Received (₹)', data:Object.values(t), tension:0.4, borderColor:'#22d3a0', backgroundColor:'rgba(34,211,160,0.12)', fill:true, pointBackgroundColor:'#22d3a0', pointRadius:5 }] },
-        options:chartOptions
-    });
+// ── Sort table ────────────────────────────────────────────────────────────────
+function sortT(key){
+  SD = SK===key ? SD*-1 : 1; SK=key;
+  document.querySelectorAll('th').forEach(t=>t.className='');
+  const el=document.getElementById('th-'+key);
+  if(el) el.className=SD===1?'sort-asc':'sort-desc';
+  render();
 }
 
-// ── CITY COORDINATES (populated by server, fallback table for known cities) ──
-const CITY_COORDS = {
-    'zambia':       { lat:-15.4166, lng:28.2833, city:'Lusaka' },
-    'nigeria':      { lat:6.5244,  lng:3.3792,  city:'Lagos' },
-    'bangladesh':   { lat:23.8103, lng:90.4125,  city:'Dhaka' },
-    'togo':         { lat:6.1374,  lng:1.2123,   city:'Lomé' },
-    'iraq':         { lat:33.3128, lng:44.3615,  city:'Baghdad' },
-    'mongolia':     { lat:47.8864, lng:106.9057, city:'Ulaanbaatar' },
-    'turkmenistan': { lat:37.9601, lng:58.3261,  city:'Ashgabat' },
-    'south africa': { lat:-26.2041,lng:28.0473,  city:'Johannesburg' },
-    'tanzania':     { lat:-6.7924, lng:39.2083,  city:'Dar es Salaam' },
-    'kenya':        { lat:-1.2921, lng:36.8219,  city:'Nairobi' },
-    'ethiopia':     { lat:9.0054,  lng:38.7636,  city:'Addis Ababa' },
-    'egypt':        { lat:30.0444, lng:31.2357,  city:'Cairo' },
-    'uae':          { lat:25.2048, lng:55.2708,  city:'Dubai' },
-    'thailand':     { lat:13.7563, lng:100.5018, city:'Bangkok' },
-    'philippines':  { lat:14.5995, lng:120.9842, city:'Manila' },
-    'vietnam':      { lat:21.0278, lng:105.8342, city:'Hanoi' },
-    'nepal':        { lat:27.7172, lng:85.3240,  city:'Kathmandu' },
-    'sri lanka':    { lat:6.9271,  lng:79.8612,  city:'Colombo' },
-    'iran':         { lat:35.6892, lng:51.3890,  city:'Tehran' },
-};
-
-let leafletMap = null;
-
-function renderMap(){
-    // Load Leaflet if not loaded yet
-    if(!window.L){
-        const link = document.createElement('link');
-        link.rel='stylesheet'; link.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = () => _buildMap();
-        document.head.appendChild(script);
-    } else {
-        _buildMap();
-    }
+// ── Animate numbers ───────────────────────────────────────────────────────────
+function animN(id,target){
+  const el=document.getElementById(id); if(!el) return;
+  const dur=700,start=performance.now();
+  (function tick(now){
+    const p=Math.min((now-start)/dur,1),e=1-Math.pow(1-p,3);
+    el.textContent=Math.round(target*e);
+    if(p<1) requestAnimationFrame(tick);
+  })(performance.now());
 }
-
-function _buildMap(){
-    const el = document.getElementById('leadsMap');
-    if(!el) return;
-
-    // Destroy old map if exists
-    if(leafletMap){ leafletMap.remove(); leafletMap = null; }
-
-    leafletMap = L.map('leadsMap', { zoomControl:true }).setView([20, 30], 2);
-
-    // Dark tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains:'abcd', maxZoom:19
-    }).addTo(leafletMap);
-
-    // Status → pin colour
-    const statusColor = s => {
-        if(!s) return '#94a3b8';
-        s = s.toLowerCase();
-        if(s.includes('negotiat'))       return '#60a5fa';
-        if(s.includes('interest'))       return '#22d3a0';
-        if(s.includes('reply') || s.includes('proposal')) return '#fb923c';
-        if(s.includes('not') || s.includes('cold') || s.includes('lost')) return '#f87171';
-        if(s.includes('hot') || s.includes('mou'))  return '#facc15';
-        return '#a78bfa';
-    };
-
-    // Group leads by country for aggregation
-    const byCountry = {};
-    filteredData.forEach(r => {
-        const key = (r.country||'').toLowerCase().trim();
-        if(!byCountry[key]) byCountry[key] = [];
-        byCountry[key].push(r);
-    });
-
-    Object.entries(byCountry).forEach(([key, leads]) => {
-        // Use server coords if available, else lookup table
-        let coords = null;
-        if(leads[0].lat && leads[0].lng){
-            coords = { lat: leads[0].lat, lng: leads[0].lng, city: leads[0].city || leads[0].country };
-        } else {
-            coords = CITY_COORDS[key] || CITY_COORDS[key.split(' ')[0]];
-        }
-        if(!coords) return;
-
-        const topLead   = leads.sort((a,b)=>(b.value_inr||0)-(a.value_inr||0))[0];
-        const totalVal  = leads.reduce((s,l)=>s+(l.value_inr||0),0);
-        const color     = statusColor(topLead.status);
-        const radius    = Math.max(8, Math.min(22, 8 + Math.log10((totalVal||1)+1) * 3));
-
-        const circle = L.circleMarker([coords.lat, coords.lng], {
-            radius, color: color, fillColor: color,
-            fillOpacity: 0.85, weight: 2, opacity: 1
-        }).addTo(leafletMap);
-
-        const popupRows = leads.map(l =>
-            `<tr style="border-bottom:1px solid #334155">
-                <td style="padding:4px 8px;font-weight:600">${l.company||'—'}</td>
-                <td style="padding:4px 8px"><span style="background:${statusColor(l.status)}22;color:${statusColor(l.status)};border-radius:4px;padding:1px 6px;font-size:11px">${l.status||'—'}</span></td>
-                <td style="padding:4px 8px;color:#22d3a0">${l.value_inr>0?'₹'+Math.round(l.value_inr).toLocaleString('en-IN'):'—'}</td>
-            </tr>`
-        ).join('');
-
-        circle.bindPopup(`
-            <div style="font-family:Arial;min-width:280px;background:#111827;border-radius:8px;overflow:hidden">
-                <div style="background:#1e293b;padding:10px 14px;border-bottom:1px solid #334155">
-                    <strong style="font-size:14px;color:#fff">📍 ${coords.city || leads[0].country}</strong>
-                    <span style="float:right;color:#94a3b8;font-size:12px">${leads.length} lead${leads.length>1?'s':''}</span>
-                </div>
-                <table style="width:100%;color:#e2e8f0;font-size:12px">${popupRows}</table>
-                ${totalVal>0?`<div style="padding:8px 14px;background:#0f172a;font-size:12px;color:#22d3a0;text-align:right;border-top:1px solid #334155">Total: ₹${Math.round(totalVal).toLocaleString('en-IN')}</div>`:''}
-            </div>`, { maxWidth:340, className:'dark-popup' }
-        );
-
-        // City label
-        L.tooltip({ permanent:true, direction:'top', className:'map-label', offset:[0,-radius] })
-         .setContent(`<span style="font-size:10px;color:#fff;background:rgba(0,0,0,0.6);padding:1px 5px;border-radius:3px">${leads[0].country}</span>`)
-         .setLatLng([coords.lat, coords.lng])
-         .addTo(leafletMap);
-    });
-}
-
 </script>
-
 </body>
 </html>
